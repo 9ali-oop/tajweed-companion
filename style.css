@@ -76,9 +76,11 @@ a{color:var(--brand)}
 .unit:hover{background:var(--brand-soft)}
 .unit .n{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums;
   color:var(--fam);min-width:2rem;text-align:center}
-.unit .body{flex:1;min-width:0}
-.unit .t{font-weight:600;line-height:1.25;margin-bottom:.1rem}
-.unit .t-ar{font-family:Amiri,serif;direction:rtl;font-size:1.05rem;color:var(--ink-soft);
+/* .body and its children are spans, so they need an explicit block/flex
+   display or the English and Arabic titles run together on one line. */
+.unit .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:.12rem}
+.unit .t{display:block;font-weight:600;line-height:1.25}
+.unit .t-ar{display:block;font-family:Amiri,serif;direction:rtl;font-size:1.05rem;color:var(--ink-soft);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .unit .state{font-size:.78rem;font-weight:700;white-space:nowrap;padding:.28rem .6rem;border-radius:999px;
   background:var(--sunk);color:var(--ink-faint)}
