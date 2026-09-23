@@ -18,10 +18,11 @@
   function saveProgress(p) {
     try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) {}
   }
-  function record(ep, score, total) {
+  function record(ep, score, total, newRun) {
     var p = loadProgress();
     var prev = p[ep] || { best: 0, total: total, runs: 0 };
-    p[ep] = { best: Math.max(prev.best, score), total: total, runs: (prev.runs || 0) + 1 };
+    p[ep] = { best: Math.max(prev.best, score), total: total,
+              runs: (prev.runs || 0) + (newRun ? 1 : 0) };
     saveProgress(p);
   }
 
@@ -147,13 +148,32 @@
   }
 
   /* ── drill ──────────────────────────────── */
+  // One attempt at a unit. Answers are kept per question so the learner can
+  // move back and forth freely: a revisited question shows exactly what was
+  // picked and why, and cannot be re-answered — the score is the first try,
+  // otherwise going back would become a way to fix answers. Option order is
+  // fixed per question for the whole attempt, so going back never reshuffles
+  // what the learner has already seen.
   var S = null;
+
+  function newAttempt(unit) {
+    return { unit: unit, ti: 0, qi: 0, streak: 0, best: 0, view: "",
+             ans: [], orders: [], draft: [], recorded: false };
+  }
+
+  function scoreOf() {
+    return S.ans.filter(function (a) { return a && a.ok; }).length;
+  }
+
+  function answeredCount() {
+    return S.ans.filter(Boolean).length;
+  }
 
   function renderUnit(ep) {
     var unit = null;
     UNITS.forEach(function (u) { if (u.ep === ep) unit = u; });
     if (!unit) { location.hash = "#/"; return; }
-    S = { unit: unit, ti: 0, qi: 0, score: 0, streak: 0, best: 0, missed: [], answered: false, picked: [] };
+    S = newAttempt(unit);
     renderStart();
   }
 
@@ -166,10 +186,12 @@
       '</div><div class="card">' + inner + '</div>';
   }
 
-  function mount(inner, showStreak) {
+  function mount(inner, showStreak, keepScroll) {
     root.innerHTML = shell(inner, showStreak);
     document.getElementById("btnBack").addEventListener("click", function () { location.hash = "#/"; });
-    window.scrollTo(0, 0);
+    // After answering, the feedback appears below the options; jumping to the
+    // top would hide it on a phone.
+    if (!keepScroll) window.scrollTo(0, 0);
   }
 
   function setBar(done, total) {
@@ -178,6 +200,7 @@
   }
 
   function renderStart() {
+    S.view = "";
     var u = S.unit;
     mount(
       '<h1>' + esc(u.title_en) + '</h1>' +
@@ -188,15 +211,18 @@
       '<button class="ghost" id="skip">Skip to the questions</button>', false);
     setBar(0, 1);
     document.getElementById("go").addEventListener("click", function () { S.ti = 0; renderTeach(); });
-    document.getElementById("skip").addEventListener("click", function () { S.qi = 0; renderQ(); });
+    document.getElementById("skip").addEventListener("click", function () { renderQ(); });
   }
 
   function renderTeach() {
+    S.view = "";
     var u = S.unit, t = u.teach[S.ti];
     var tone = TONE[t.tone] || "brand";
     var cVar = tone === "brand" ? "var(--brand)" : "var(--" + tone + ")";
     var cBg = tone === "brand" ? "var(--brand-soft)" : "var(--" + tone + "-bg)";
     var diagram = (tone === "stop" || tone === "between" || tone === "flow") ? flowSVG(tone) : "";
+    var last = S.ti === u.teach.length - 1;
+    var fwd = !last ? "Next ›" : answeredCount() ? "Back to the questions" : "Start the drill";
     mount(
       '<div class="teach" style="--c:' + cVar + ';--c-bg:' + cBg + '">' +
         '<div class="head"><span class="badge">' + esc(t.label_en) + '</span>' +
@@ -206,74 +232,38 @@
         (t.mnemonic ? '<div class="mnem ar">' + esc(t.mnemonic) + '</div>' : '') +
         (t.letters ? '<div class="lets ar">' + esc(t.letters) + '</div>' : '') +
         '<p>' + t.body + '</p>' +
-        '<button class="cta" id="next">' +
-          (S.ti < u.teach.length - 1 ? "Next" : "Start the drill") + '</button>' +
+        '<div class="qnav">' +
+          '<button class="nav-btn" id="tprev">‹ Back</button>' +
+          '<button class="nav-btn primary" id="tnext">' + fwd + '</button>' +
+        '</div>' +
       '</div>', false);
     setBar(S.ti, u.teach.length);
-    document.getElementById("next").addEventListener("click", function () {
-      S.ti++;
-      if (S.ti < u.teach.length) renderTeach();
-      else { S.qi = 0; renderQ(); }
+    document.getElementById("tprev").addEventListener("click", function () {
+      if (S.ti > 0) { S.ti--; renderTeach(); } else renderStart();
+    });
+    document.getElementById("tnext").addEventListener("click", function () {
+      if (!last) { S.ti++; renderTeach(); } else renderQ();
     });
   }
 
-  function renderQ() {
-    var u = S.unit, q = u.questions[S.qi];
-    S.answered = false; S.picked = [];
-    var body = '<div class="qnum">Question ' + (S.qi + 1) + ' of ' + u.questions.length + '</div>' +
-      '<p class="q">' + q.q + '</p>' +
-      (q.bigArabic ? '<div class="big-letter ar">' + esc(q.bigArabic) + '</div>' : '') +
-      (q.ayah ? '<div class="ayah ar">' + esc(q.ayah) + '</div>' +
-                '<div class="ref">' + esc(q.ref || "") + '</div>' : '') +
-      (q.verseStem ? '<div class="verse-q ar">' + esc(q.verseStem) + ' <span class="blank"></span></div>' : '');
-
-    if (q.type === "multi") {
-      body += '<div class="tiles">' + (q.pool || []).map(function (ch) {
-        return '<button class="tile ar" data-ch="' + esc(ch) + '" aria-pressed="false">' + esc(ch) + '</button>';
-      }).join("") + '</div><button class="cta" id="check" disabled>Check</button>';
-    } else {
-      // Option order is shuffled at render time. Authored units cluster their
-      // correct answers near the top (one unit had 7 of 11 at position 0),
-      // which makes a drill tappable without reading it. `data-i` keeps the
-      // original index, so grading and the answer key are untouched. Numeric
-      // option sets stay in their natural order — a scrambled 0/1/2/3 reads as
-      // a bug, not a challenge.
-      var opts = q.options || [];
-      var order = opts.map(function (_, i) { return i; });
-      var numeric = opts.length > 0 && opts.every(function (o) { return /^\s*\d+\s*$/.test(o); });
-      if (!numeric) {
-        for (var s = order.length - 1; s > 0; s--) {
-          var j = Math.floor(Math.random() * (s + 1));
-          var tmp = order[s]; order[s] = order[j]; order[j] = tmp;
-        }
+  function orderFor(i) {
+    // Shuffled once per question per attempt. Authored units cluster their
+    // correct answers near the top (one unit had 7 of 11 at position 0),
+    // which makes a drill tappable without reading it. `data-i` keeps the
+    // original index, so grading and the answer key are untouched. Numeric
+    // option sets stay in natural order — a scrambled 0/1/2/3 reads as a bug.
+    if (S.orders[i]) return S.orders[i];
+    var opts = S.unit.questions[i].options || [];
+    var order = opts.map(function (_, k) { return k; });
+    var numeric = opts.length > 0 && opts.every(function (o) { return /^\s*\d+\s*$/.test(o); });
+    if (!numeric) {
+      for (var s = order.length - 1; s > 0; s--) {
+        var j = Math.floor(Math.random() * (s + 1));
+        var tmp = order[s]; order[s] = order[j]; order[j] = tmp;
       }
-      body += '<div class="opts">' + order.map(function (oi) {
-        return '<button class="opt' + (q.arabicOptions ? " ar" : "") + '" data-i="' + oi + '">' +
-          opts[oi] + '</button>';
-      }).join("") + '</div>';
     }
-    mount(body, true);
-    setBar(S.qi, u.questions.length);
-
-    if (q.type === "multi") {
-      var tiles = root.querySelectorAll(".tile");
-      tiles.forEach(function (tl) {
-        tl.addEventListener("click", function () {
-          if (S.answered) return;
-          var on = tl.getAttribute("aria-pressed") === "true";
-          tl.setAttribute("aria-pressed", String(!on));
-          S.picked = Array.prototype.filter.call(tiles, function (x) {
-            return x.getAttribute("aria-pressed") === "true";
-          }).map(function (x) { return x.dataset.ch; });
-          document.getElementById("check").disabled = S.picked.length === 0;
-        });
-      });
-      document.getElementById("check").addEventListener("click", function () { gradeMulti(q, tiles); });
-    } else {
-      root.querySelectorAll(".opt").forEach(function (b) {
-        b.addEventListener("click", function () { gradeChoice(q, b); });
-      });
-    }
+    S.orders[i] = order;
+    return order;
   }
 
   function correctText(q) {
@@ -281,89 +271,179 @@
     return (q.options || [])[q.answerIndex];
   }
 
-  function finish(ok, q) {
-    S.answered = true;
-    if (ok) { S.score++; S.streak++; if (S.streak > S.best) S.best = S.streak; }
-    else { S.streak = 0; S.missed.push(q); }
-    var card = root.querySelector(".card");
-    var fb = document.createElement("div");
-    fb.className = "fb " + (ok ? "good" : "bad");
-    fb.innerHTML = '<div class="verdict">' +
-      (ok ? "Correct" : "Not quite — it is " + esc(correctText(q))) + '</div>' +
-      '<div class="why">' + q.why + '</div>';
-    card.appendChild(fb);
-    var nxt = document.createElement("button");
-    nxt.className = "cta";
-    nxt.textContent = S.qi < S.unit.questions.length - 1 ? "Next question" : "See results";
-    nxt.addEventListener("click", function () {
-      S.qi++;
-      if (S.qi < S.unit.questions.length) renderQ(); else renderDone();
-    });
-    card.appendChild(nxt);
-    setBar(S.qi + 1, S.unit.questions.length);
-    var st = document.getElementById("streak");
-    if (st) st.textContent = S.streak > 1 ? "🔥 " + S.streak : "";
-    nxt.focus();
+  function feedbackHTML(ok, q) {
+    return '<div class="fb ' + (ok ? "good" : "bad") + '">' +
+      '<div class="verdict">' + (ok ? "Correct" : "Not quite — it is " + esc(correctText(q))) + '</div>' +
+      '<div class="why">' + q.why + '</div></div>';
   }
 
-  function gradeChoice(q, btn) {
-    if (S.answered) return;
-    var i = parseInt(btn.dataset.i, 10);
-    var ok = i === q.answerIndex;
-    root.querySelectorAll(".opt").forEach(function (b) {
-      b.disabled = true;
-      var bi = parseInt(b.dataset.i, 10);
-      if (bi === q.answerIndex) b.classList.add("right");
-      else if (bi === i) b.classList.add("wrong");
+  function renderQ(keepScroll) {
+    S.view = "q";
+    var u = S.unit, n = u.questions.length, i = S.qi, q = u.questions[i], a = S.ans[i];
+
+    var dots = '<div class="dots" aria-label="Jump to a question">' +
+      u.questions.map(function (_, k) {
+        var r = S.ans[k];
+        var state = r ? (r.ok ? " ok" : " bad") : "";
+        var label = "Question " + (k + 1) + (r ? (r.ok ? ", correct" : ", wrong") : ", not answered yet");
+        return '<button class="dot' + state + (k === i ? " cur" : "") + '" data-k="' + k +
+          '" aria-label="' + label + '"' + (k === i ? ' aria-current="step"' : "") + '>' + (k + 1) + '</button>';
+      }).join("") + '</div>';
+
+    var body = dots +
+      '<div class="qnum">Question ' + (i + 1) + ' of ' + n + '</div>' +
+      '<p class="q">' + q.q + '</p>' +
+      (q.bigArabic ? '<div class="big-letter ar">' + esc(q.bigArabic) + '</div>' : '') +
+      (q.ayah ? '<div class="ayah ar">' + esc(q.ayah) + '</div>' +
+                '<div class="ref">' + esc(q.ref || "") + '</div>' : '') +
+      (q.verseStem ? '<div class="verse-q ar">' + esc(q.verseStem) + ' <span class="blank"></span></div>' : '');
+
+    if (q.type === "multi") {
+      var pick = a ? a.pick : (S.draft[i] || []);
+      var key = q.answers || [];
+      body += '<div class="tiles">' + (q.pool || []).map(function (ch) {
+        var on = pick.indexOf(ch) > -1, cls = "";
+        if (a) {
+          var isKey = key.indexOf(ch) > -1;
+          cls = on && isKey ? " right" : on ? " wrong" : isKey ? " missed" : "";
+        }
+        return '<button class="tile ar' + cls + '" data-ch="' + esc(ch) + '" aria-pressed="' + on + '"' +
+          (a ? " disabled" : "") + '>' + esc(ch) + '</button>';
+      }).join("") + '</div>' +
+      (a ? "" : '<button class="cta" id="check"' + (pick.length ? "" : " disabled") + '>Check</button>');
+    } else {
+      var opts = q.options || [];
+      body += '<div class="opts">' + orderFor(i).map(function (oi) {
+        var cls = a ? (oi === q.answerIndex ? " right" : oi === a.pick ? " wrong" : "") : "";
+        return '<button class="opt' + (q.arabicOptions ? " ar" : "") + cls + '" data-i="' + oi + '"' +
+          (a ? " disabled" : "") + '>' + opts[oi] + '</button>';
+      }).join("") + '</div>';
+    }
+
+    if (a) body += feedbackHTML(a.ok, q);
+
+    var last = i === n - 1;
+    body += '<div class="qnav">' +
+      '<button class="nav-btn" id="prev"' + (i === 0 && !u.teach.length ? " disabled" : "") + '>' +
+        (i === 0 ? "‹ Cards" : "‹ Back") + '</button>' +
+      '<button class="nav-btn' + (a || last ? " primary" : "") + '" id="nextq">' +
+        (last ? "See results" : a ? "Next ›" : "Skip ›") + '</button>' +
+      '</div>';
+
+    mount(body, true, keepScroll);
+    setBar(answeredCount(), n);
+
+    root.querySelectorAll(".dot").forEach(function (d) {
+      d.addEventListener("click", function () { S.qi = parseInt(d.dataset.k, 10); renderQ(); });
     });
-    finish(ok, q);
+    document.getElementById("prev").addEventListener("click", function () {
+      if (S.qi > 0) { S.qi--; renderQ(); }
+      else if (u.teach.length) { S.ti = u.teach.length - 1; renderTeach(); }
+    });
+    document.getElementById("nextq").addEventListener("click", function () {
+      if (S.qi < n - 1) { S.qi++; renderQ(); } else renderDone();
+    });
+
+    if (a) return;
+    if (q.type === "multi") {
+      var tiles = root.querySelectorAll(".tile");
+      tiles.forEach(function (tl) {
+        tl.addEventListener("click", function () {
+          var on = tl.getAttribute("aria-pressed") === "true";
+          tl.setAttribute("aria-pressed", String(!on));
+          S.draft[i] = Array.prototype.filter.call(tiles, function (x) {
+            return x.getAttribute("aria-pressed") === "true";
+          }).map(function (x) { return x.dataset.ch; });
+          document.getElementById("check").disabled = S.draft[i].length === 0;
+        });
+      });
+      document.getElementById("check").addEventListener("click", function () {
+        var picked = S.draft[i] || [], want = q.answers || [];
+        var ok = picked.length === want.length &&
+          want.every(function (w) { return picked.indexOf(w) > -1; });
+        answer(i, picked.slice(), ok);
+      });
+    } else {
+      root.querySelectorAll(".opt").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var oi = parseInt(b.dataset.i, 10);
+          answer(i, oi, oi === q.answerIndex);
+        });
+      });
+    }
   }
 
-  function gradeMulti(q, tiles) {
-    if (S.answered) return;
-    var ans = q.answers || [];
-    var ok = S.picked.length === ans.length && ans.every(function (a) { return S.picked.indexOf(a) > -1; });
-    tiles.forEach(function (tl) {
-      tl.disabled = true;
-      var ch = tl.dataset.ch, on = tl.getAttribute("aria-pressed") === "true", isAns = ans.indexOf(ch) > -1;
-      if (on && isAns) tl.classList.add("right");
-      else if (on && !isAns) tl.classList.add("wrong");
-      else if (!on && isAns) tl.classList.add("missed");
-    });
-    var chk = document.getElementById("check");
-    if (chk) chk.remove();
-    finish(ok, q);
+  function answer(i, pick, ok) {
+    if (S.ans[i]) return;
+    S.ans[i] = { pick: pick, ok: ok };
+    if (ok) { S.streak++; if (S.streak > S.best) S.best = S.streak; }
+    else S.streak = 0;
+    renderQ(true);
+    var nx = document.getElementById("nextq");
+    if (nx) nx.focus();
   }
 
   function renderDone() {
-    var u = S.unit, n = u.questions.length, pct = Math.round(S.score / n * 100);
+    S.view = "";
+    var u = S.unit, n = u.questions.length, score = scoreOf(), skipped = n - answeredCount();
+    var pct = Math.round(score / n * 100);
     var verdict = pct === 100 ? "Perfect." : pct >= 75 ? "Solid." : pct >= 50 ? "Getting there." : "Worth another pass.";
-    record(u.ep, S.score, n);
-    var html = '<div class="score">' + S.score + '<small>out of ' + n + ' — ' + verdict + '</small></div>';
+    // Returning to results after reviewing or finishing skipped questions
+    // updates the best score without counting another run.
+    record(u.ep, score, n, !S.recorded);
+    S.recorded = true;
+
+    var html = '<div class="score">' + score + '<small>out of ' + n + ' — ' + verdict + '</small></div>';
+    if (skipped) {
+      html += '<p class="skipnote">' + skipped + (skipped === 1 ? " question" : " questions") +
+        ' skipped — tap one below to answer it.</p>';
+    }
     if (S.best > 1) {
       html += '<p style="text-align:center;margin:.6rem 0 0;color:var(--between);font-weight:600">Best streak 🔥 ' + S.best + '</p>';
     }
-    if (S.missed.length) {
-      html += '<div class="review"><h3>Worth revisiting</h3><ul>' + S.missed.map(function (m) {
-        return '<li>' + esc(String(m.q).replace(/<[^>]+>/g, "")) + ' — <strong>' + esc(correctText(m)) + '</strong></li>';
+    var revisit = [];
+    u.questions.forEach(function (_, k) { if (!S.ans[k] || !S.ans[k].ok) revisit.push(k); });
+    if (revisit.length) {
+      html += '<div class="review"><h3>Worth revisiting</h3><ul>' + revisit.map(function (k) {
+        var q = u.questions[k], r = S.ans[k];
+        return '<li><button class="jump" data-k="' + k + '"><span class="jn">' + (k + 1) + '</span>' +
+          esc(String(q.q).replace(/<[^>]+>/g, "")) + ' — ' +
+          (r ? '<strong>' + esc(correctText(q)) + '</strong>' : '<em>not answered</em>') +
+          '</button></li>';
       }).join("") + '</ul></div>';
     }
     html += '<button class="cta" id="again">Drill again</button>' +
+      '<button class="ghost" id="review">Review your answers</button>' +
       '<button class="ghost" id="hub">Back to all units</button>' +
       '<p class="foot">Episode ' + u.ep + ' — <span class="ar">' + esc(u.title_ar) + '</span>' +
       (u.url ? ' · <a href="' + u.url + '" target="_blank" rel="noopener">watch the lesson</a>' : '') + '</p>';
     mount(html, false);
     setBar(1, 1);
-    document.getElementById("again").addEventListener("click", function () {
-      S.qi = 0; S.score = 0; S.streak = 0; S.best = 0; S.missed = []; renderQ();
+
+    root.querySelectorAll(".jump").forEach(function (b) {
+      b.addEventListener("click", function () { S.qi = parseInt(b.dataset.k, 10); renderQ(); });
     });
+    document.getElementById("again").addEventListener("click", function () {
+      S = newAttempt(u); renderQ();
+    });
+    document.getElementById("review").addEventListener("click", function () { S.qi = 0; renderQ(); });
     document.getElementById("hub").addEventListener("click", function () { location.hash = "#/"; });
   }
+
+  // ← and → move between questions from the keyboard. Only while a question
+  // is on screen, and never with a modifier held, so browser shortcuts win.
+  document.addEventListener("keydown", function (e) {
+    if (!S || S.view !== "q" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var id = e.key === "ArrowLeft" ? "prev" : e.key === "ArrowRight" ? "nextq" : null;
+    if (!id) return;
+    var b = document.getElementById(id);
+    if (b && !b.disabled) { e.preventDefault(); b.click(); }
+  });
 
   /* ── routing ────────────────────────────── */
   function route() {
     var m = /^#\/u\/(\d+)/.exec(location.hash || "");
-    if (m) renderUnit(parseInt(m[1], 10)); else renderHub();
+    if (m) renderUnit(parseInt(m[1], 10)); else { S = null; renderHub(); }
   }
   window.addEventListener("hashchange", route);
 
