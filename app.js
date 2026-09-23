@@ -24,7 +24,15 @@
     p[ep] = { best: Math.max(prev.best, score), total: total,
               runs: (prev.runs || 0) + (newRun ? 1 : 0) };
     saveProgress(p);
+    // sync.js pushes this to the signed-in account, if there is one.
+    document.dispatchEvent(new CustomEvent("tj:progress-saved"));
   }
+
+  // sync.js merged another device's scores into local storage: redraw the hub
+  // so the new scores show, but never yank the learner out of a drill.
+  document.addEventListener("tj:progress-updated", function () {
+    if (!S) renderHub();
+  });
 
   /* ── chapter families (colour + grouping) ── */
   function family(t) {
@@ -90,14 +98,15 @@
         '<h1>Tajweed Companion</h1>' +
         '<p class="sub">Drills for <span class="ar">شرح كتاب التجويد المصور</span> — ' +
         'د. أيمن رشدي سويد. One short unit per episode.</p>' +
+        '<div class="account" id="account"></div>' +
         '<div class="overall">' +
           '<div class="row"><span class="big">' + gotQ + ' / ' + totalQ + '</span>' +
           '<span class="cap">' + completed + ' of ' + UNITS.length + ' ready units aced</span></div>' +
           '<div class="track"><div class="fill" style="width:' +
             (totalQ ? (gotQ / totalQ * 100) : 0) + '%"></div></div>' +
           '<p style="margin:.7rem 0 0;font-size:.84rem;color:var(--ink-faint)">' +
-            UNITS.length + ' of ' + CATALOGUE.length + ' units ready. The rest are written and ' +
-            'being checked for accuracy before they go live.</p>' +
+            UNITS.length + ' of ' + CATALOGUE.length + ' units ready. More are added as the ' +
+            'series goes on.</p>' +
         '</div>' +
       '</div>';
 
@@ -140,6 +149,7 @@
       b.addEventListener("click", function () { location.hash = "#/u/" + b.dataset.ep; });
     });
     window.scrollTo(0, 0);
+    document.dispatchEvent(new CustomEvent("tj:hub-rendered"));
   }
 
   function esc(s) {
