@@ -5,11 +5,11 @@
 // security rules, which let each signed-in user read and write only their own
 // progress record.
 //
-// Until apiKey and appId are filled in, sync.js stays switched off and the
-// site keeps progress per device, exactly as before.
+// If apiKey or appId is ever blanked, sync.js switches itself off and the
+// site falls back to keeping progress per device.
 window.FIREBASE_CONFIG = {
-  apiKey: "PASTE_API_KEY",
+  apiKey: "AIzaSyAOEcbMB6ZIRB2SMNtV6Boh6PU9B06GzpY",
   authDomain: "tajweed-companion.firebaseapp.com",
   projectId: "tajweed-companion",
-  appId: "PASTE_APP_ID"
+  appId: "1:869722736392:web:96f997c5ab7b0a24bf8ebd"
 };
