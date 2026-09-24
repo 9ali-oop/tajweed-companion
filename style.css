@@ -251,3 +251,30 @@ svg.flow{display:block;width:100%;height:78px;margin:.3rem 0 .2rem}
 .hub-foot a{font-weight:600}
 .acct-note a{text-underline-offset:2px}
 .account a.acct-link{display:inline-block}
+
+/* ── recitation ─────────────────────────── */
+.ref-row{display:flex;align-items:center;justify-content:center;gap:.7rem;flex-wrap:wrap;margin:0 0 1rem}
+.ref-row .ref{margin:0}
+.play{font-size:.82rem;font-weight:600;padding:.4rem .85rem;border-radius:999px;
+  background:var(--brand-soft);color:var(--brand);min-height:34px}
+.play:hover{filter:brightness(.97)}
+.play[data-state="playing"]{background:var(--brand);color:#fff}
+.play[data-state="loading"]{opacity:.75}
+.play[data-state="error"]{background:var(--bad-bg);color:var(--bad)}
+
+/* ── glossary ───────────────────────────── */
+.gl{cursor:pointer;text-decoration:underline dotted;text-decoration-color:var(--brand);
+  text-decoration-thickness:2px;text-underline-offset:.35em;border-radius:4px}
+.gl:hover,.gl[aria-expanded="true"]{background:var(--brand-soft)}
+.gl:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.gpop{position:absolute;z-index:50;width:min(320px,calc(100vw - 24px));box-sizing:border-box;
+  background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:16px;
+  padding:.8rem 1rem .9rem;box-shadow:0 12px 32px -10px rgba(26,22,51,.35);
+  animation:gpop-in .12s ease-out}
+@keyframes gpop-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.gp-head{display:flex;align-items:baseline;justify-content:space-between;gap:.8rem}
+.gp-ar{font-size:1.6rem;line-height:1.3;color:var(--brand)}
+.gp-tr{font-size:.85rem;font-style:italic;color:var(--ink-soft)}
+.gp-en{font-weight:700;margin:.15rem 0 .3rem}
+.gp-def{margin:0;font-size:.92rem;line-height:1.5;color:var(--ink-soft)}
+.gp-def .ar{font-size:1.15em;color:var(--ink)}

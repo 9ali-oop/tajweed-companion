@@ -211,6 +211,141 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  /* ── glossary: tap a term for its meaning ── */
+  // Units write every Arabic word inside <span class='ar'>. A span is linked
+  // only when its whole text is a glossary form, so a verse or an āya that
+  // merely contains مخرج is never touched. Same normalisation as
+  // norm_term() in build_data.py.
+  var GLOSS = {}, GLOSS_BY_ID = {};
+  function glossKey(s) {
+    return String(s || "").normalize("NFC")
+      .replace(/[ً-ٰٟـۖ-ۭ]/g, "")
+      .replace(/[أإآٱ]/g, "ا")
+      .replace(/\s+/g, " ")
+      .replace(/^[\s.,،؛:;!?()«»"']+|[\s.,،؛:;!?()«»"']+$/g, "");
+  }
+  (window.GLOSSARY || []).forEach(function (e) {
+    GLOSS_BY_ID[e.id] = e;
+    e.forms.forEach(function (f) { GLOSS[glossKey(f)] = e; });
+  });
+  function glossFor(text) {
+    var k = glossKey(text);
+    if (GLOSS[k]) return GLOSS[k];
+    return k.indexOf("ال") === 0 ? GLOSS[k.slice(2)] || null : null;
+  }
+
+  // First mention of each term per screen only; underlining every repeat
+  // turns a paragraph into a page of links. The question's own wording is
+  // linked only once it has been answered: "What is التكرير?" would
+  // otherwise come with its answer attached.
+  function linkGlossary(scope, questionOpen) {
+    var seen = {};
+    var sel = ".teach p span.ar, .why span.ar" + (questionOpen ? "" : ", p.q span.ar");
+    scope.querySelectorAll(sel).forEach(function (sp) {
+      var e = glossFor(sp.textContent);
+      if (!e || seen[e.id]) return;
+      seen[e.id] = true;
+      sp.classList.add("gl");
+      sp.dataset.g = e.id;
+      sp.tabIndex = 0;
+      sp.setAttribute("role", "button");
+      sp.setAttribute("aria-expanded", "false");
+      sp.setAttribute("aria-label", sp.textContent + " — " + e.en + ", tap for meaning");
+    });
+  }
+
+  var pop = null, popFor = null;
+  function closeGloss() {
+    if (pop) pop.remove();
+    if (popFor) popFor.setAttribute("aria-expanded", "false");
+    pop = null; popFor = null;
+  }
+  function openGloss(sp) {
+    var e = GLOSS_BY_ID[sp.dataset.g];
+    if (!e) return;
+    if (popFor === sp) return closeGloss();
+    closeGloss();
+    // Arabic inside a definition gets the Arabic face, like everywhere else.
+    var def = esc(e.def).replace(/[؀-ۿ]+(?:\s+[؀-ۿ]+)*/g, function (m) {
+      return '<span class="ar">' + m + '</span>';
+    });
+    pop = document.createElement("div");
+    pop.className = "gpop";
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", e.en);
+    pop.innerHTML =
+      '<div class="gp-head"><span class="gp-ar ar">' + esc(e.ar) + '</span>' +
+        '<span class="gp-tr">' + esc(e.tr) + '</span></div>' +
+      '<div class="gp-en">' + esc(e.en) + '</div>' +
+      '<p class="gp-def">' + def + '</p>';
+    document.body.appendChild(pop);
+    popFor = sp;
+    sp.setAttribute("aria-expanded", "true");
+
+    // Below the word, or above it when the bottom of the screen is too close;
+    // always kept inside the viewport horizontally.
+    var r = sp.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+    var left = Math.min(Math.max(12, r.left + r.width / 2 - w / 2),
+      document.documentElement.clientWidth - w - 12);
+    var below = r.bottom + 8 + h <= window.innerHeight || r.top - 8 - h < 0;
+    pop.style.left = (left + window.scrollX) + "px";
+    pop.style.top = ((below ? r.bottom + 8 : r.top - 8 - h) + window.scrollY) + "px";
+  }
+  document.addEventListener("click", function (ev) {
+    var sp = ev.target.closest && ev.target.closest(".gl");
+    if (sp) { ev.preventDefault(); openGloss(sp); return; }
+    if (pop && !pop.contains(ev.target)) closeGloss();
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && pop) { var f = popFor; closeGloss(); if (f) f.focus(); return; }
+    var sp = ev.target.closest && ev.target.closest(".gl");
+    if (sp && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); openGloss(sp); }
+  });
+  window.addEventListener("resize", closeGloss);
+
+  /* ── recitation: al-Ḥuṣarī, one āya at a time ── */
+  // EveryAyah serves each āya as SSSAAA.mp3. A question quoting part of an
+  // āya plays the whole of it, which is how the Shaykh cites them too.
+  var AUDIO_BASE = "https://everyayah.com/data/Husary_128kbps/";
+  var player = null, playing = null;
+  function ayahAudio(ref) {
+    var m = /(\d+)\s*:\s*(\d+)/.exec(ref || "");
+    if (!m) return "";
+    var pad = function (n) { return ("00" + n).slice(-3); };
+    return AUDIO_BASE + pad(m[1]) + pad(m[2]) + ".mp3";
+  }
+  function setPlayBtn(b, state) {
+    if (!b) return;
+    b.dataset.state = state;
+    b.setAttribute("aria-label", state === "playing" ? "Stop the recitation" :
+      "Listen to the āya, recited by al-Ḥuṣarī");
+    b.textContent = state === "playing" ? "■ Stop" : state === "loading" ? "Loading…" :
+      state === "error" ? "Couldn’t play — try again" : "▶ Listen";
+  }
+  function stopAudio() {
+    if (player) { player.pause(); player.removeAttribute("src"); player.load(); }
+    setPlayBtn(playing, "idle");
+    playing = null;
+  }
+  function togglePlay(b) {
+    if (playing === b) return stopAudio();
+    stopAudio();
+    if (!player) {
+      player = new Audio();
+      player.preload = "none";
+      player.addEventListener("playing", function () { setPlayBtn(playing, "playing"); });
+      player.addEventListener("ended", function () { setPlayBtn(playing, "idle"); playing = null; });
+      player.addEventListener("error", function () {
+        if (playing && player.getAttribute("src")) { setPlayBtn(playing, "error"); playing = null; }
+      });
+    }
+    playing = b;
+    setPlayBtn(b, "loading");
+    player.src = b.dataset.src;
+    var p = player.play();
+    if (p && p.catch) p.catch(function () { if (playing === b) { setPlayBtn(b, "error"); playing = null; } });
+  }
+
   /* ── drill ──────────────────────────────── */
   // One attempt at a unit. Answers are kept per question so the learner can
   // move back and forth freely: a revisited question shows exactly what was
@@ -253,8 +388,19 @@
   }
 
   function mount(inner, showStreak, keepScroll) {
+    closeGloss();
+    var src = playing && playing.dataset.src;
     root.innerHTML = shell(inner, showStreak);
     document.getElementById("btnBack").addEventListener("click", function () { location.hash = "#/"; });
+    linkGlossary(root, S.view === "q" && !S.ans[S.qi]);
+    // Answering redraws the question; a recitation already under way carries
+    // on and its button keeps showing Stop. Any other screen change ends it.
+    var same = src && root.querySelector('.play[data-src="' + src + '"]');
+    if (same) { playing = same; setPlayBtn(same, player && !player.paused ? "playing" : "loading"); }
+    else if (src) stopAudio();
+    root.querySelectorAll(".play").forEach(function (b) {
+      b.addEventListener("click", function () { togglePlay(b); });
+    });
     // After answering, the feedback appears below the options; jumping to the
     // top would hide it on a phone.
     if (!keepScroll) window.scrollTo(0, 0);
@@ -364,7 +510,10 @@
       '<p class="q">' + q.q + '</p>' +
       (q.bigArabic ? '<div class="big-letter ar">' + esc(q.bigArabic) + '</div>' : '') +
       (q.ayah ? '<div class="ayah ar">' + esc(q.ayah) + '</div>' +
-                '<div class="ref">' + esc(q.ref || "") + '</div>' : '') +
+                '<div class="ref-row"><span class="ref">' + esc(q.ref || "") + '</span>' +
+                (ayahAudio(q.ref) ? '<button class="play" data-src="' + ayahAudio(q.ref) + '" ' +
+                  'aria-label="Listen to the āya, recited by al-Ḥuṣarī">▶ Listen</button>' : '') +
+                '</div>' : '') +
       (q.verseStem ? '<div class="verse-q ar">' + esc(q.verseStem) + ' <span class="blank"></span></div>' : '');
 
     if (q.type === "multi") {
@@ -511,6 +660,8 @@
 
   /* ── routing ────────────────────────────── */
   function route() {
+    closeGloss();
+    stopAudio();
     var h = location.hash || "";
     var m = /^#\/u\/(\d+)/.exec(h);
     if (m) renderUnit(parseInt(m[1], 10));
@@ -566,7 +717,9 @@
           'accounts and their scores.</p>' +
         '<p>The page also loads its fonts from Google Fonts, signs you in through Google, and ' +
           'links to YouTube for each episode. Those are Google services and follow ' +
-          '<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google’s privacy policy</a>.</p>' +
+          '<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google’s privacy policy</a>. ' +
+          'When you tap Listen, the recitation (by Shaykh Maḥmūd Khalīl al-Ḥuṣarī) plays from ' +
+          'EveryAyah, a free archive of Qur’an audio.</p>' +
 
         '<h2>Delete your data</h2>' +
         '<div class="data-controls" id="data-controls">' + local + '</div>' +
