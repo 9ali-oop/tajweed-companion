@@ -123,6 +123,7 @@
   /* ── hub ────────────────────────────────── */
   function renderHub() {
     VIEW = "hub";
+    document.title = "Tajweed Companion";
     var p = loadProgress();
     var byEp = {};
     UNITS.forEach(function (u) { byEp[u.ep] = u; });
@@ -193,7 +194,7 @@
       html += "</div>";
     });
 
-    html += '<p class="hub-foot">A companion, not a substitute — the lessons are the Shaykh\'s.<br>' +
+    html += '<p class="hub-foot">A companion, not a substitute — the lessons are the Shaykh’s.<br>' +
       'Answers are independently checked; any error here is ours, not his.<br>' +
       '<a href="#/privacy">About and privacy</a></p>';
 
@@ -237,6 +238,7 @@
     UNITS.forEach(function (u) { if (u.ep === ep) unit = u; });
     if (!unit) { location.hash = "#/"; return; }
     VIEW = "unit";
+    document.title = "Unit " + unit.ep + ": " + unit.title_en + " · Tajweed Companion";
     S = newAttempt(unit);
     renderStart();
   }
@@ -523,6 +525,7 @@
   // sync.js holds the Firebase session.
   function renderPrivacy() {
     VIEW = "privacy";
+    document.title = "About and privacy · Tajweed Companion";
     var p = loadProgress(), saved = Object.keys(p).length;
     var local = saved
       ? '<p>You’re not signed in, so your scores are saved only in this browser.</p>' +
@@ -551,16 +554,16 @@
           'Nothing is sent anywhere.</p>' +
         '<p><strong>If you sign in with Google:</strong></p>' +
         '<ul>' +
-          '<li>your Google name, email address and account ID, which Google’s Firebase service ' +
-            'keeps so you can sign in;</li>' +
+          '<li>your Google name, email address and account ID, which Google keeps so you can ' +
+            'sign in;</li>' +
           '<li>your best score and number of attempts for each unit, kept in a database in ' +
             'London so they appear on all your devices.</li>' +
         '</ul>' +
         '<p>That is all. There are no analytics, no ads and no tracking, and nothing is sold or shared.</p>' +
 
         '<h2>Who can see it</h2>' +
-        '<p>Only you, and the person who runs this site, who can see sign-in accounts and scores ' +
-          'in the Firebase console.</p>' +
+        '<p>Only you, and the person who runs this site, who can see the list of signed-in ' +
+          'accounts and their scores.</p>' +
         '<p>The page also loads its fonts from Google Fonts, signs you in through Google, and ' +
           'links to YouTube for each episode. Those are Google services and follow ' +
           '<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google’s privacy policy</a>.</p>' +
@@ -570,8 +573,8 @@
         '<p class="fine">Deleting takes effect straight away. Progress saved in another browser ' +
           'stays there until you reset it on that device, and signing in there would upload it again.</p>' +
 
-        '<p class="fine">Questions or problems: <a href="https://github.com/9ali-oop/tajweed-companion/issues" ' +
-          'target="_blank" rel="noopener">github.com/9ali-oop/tajweed-companion</a>. ' +
+        '<p class="fine">Spotted a mistake? <a href="https://github.com/9ali-oop/tajweed-companion/issues/new" ' +
+          'target="_blank" rel="noopener">Report it here</a>. ' +
           'Last updated 24 September 2026.</p>' +
       '</div>';
 
@@ -595,8 +598,8 @@
   window.addEventListener("hashchange", route);
 
   if (!CATALOGUE.length && !UNITS.length) {
-    root.innerHTML = '<div class="card"><h1>No units loaded</h1>' +
-      '<p>data.js did not define any units.</p></div>';
+    root.innerHTML = '<div class="card"><h1>Couldn’t load the drills</h1>' +
+      '<p>Refresh the page to try again.</p></div>';
   } else {
     route();
   }

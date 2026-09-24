@@ -142,7 +142,7 @@ async function deleteEverything() {
     await fb.deleteDoc(fb.doc(fb.db, "progress", user.uid));
   } catch (e) {
     if (yes) yes.disabled = false;
-    return privacyMsg("Couldn’t reach the database, so nothing was deleted. Check your connection and try again.");
+    return privacyMsg("Couldn’t connect, so nothing was deleted. Check your connection and try again.");
   }
 
   // Google makes deleting an account require a recent sign-in. If this one is
@@ -191,7 +191,7 @@ async function pullAndMerge() {
     }
     setStatus("Synced");
   } catch (e) {
-    setStatus(navigator.onLine ? "Couldn't sync — saved on this device" : "Offline — saved on this device");
+    setStatus(navigator.onLine ? "Couldn’t sync — saved on this device" : "Offline — saved on this device");
   }
 }
 
@@ -207,7 +207,7 @@ async function signIn() {
       return fb.signInWithRedirect(fb.auth, provider);
     }
     state.busy = false;
-    setStatus(e && e.code === "auth/popup-closed-by-user" ? "" : "Sign-in didn't finish — try again");
+    setStatus(e && e.code === "auth/popup-closed-by-user" ? "" : "Sign-in didn’t finish — try again");
   }
 }
 
