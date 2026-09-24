@@ -18,7 +18,7 @@ const KEY = "tajweed-companion-v1";
 const cfg = window.FIREBASE_CONFIG || {};
 const configured = !!(cfg.apiKey && cfg.appId && !/^PASTE/.test(cfg.apiKey) && !/^PASTE/.test(cfg.appId));
 
-const state = { ready: false, user: null, status: "", busy: false };
+const state = { ready: false, user: null, status: "", busy: false, justDeleted: false };
 let fb = null;
 
 function readLocal() {
@@ -68,7 +68,8 @@ function draw() {
     el.innerHTML =
       '<button class="signin" id="tjSignIn"' + (state.busy ? " disabled" : "") + '>' + G_MARK +
         (state.busy ? "Signing in…" : "Sign in with Google") + '</button>' +
-      '<span class="acct-note">' + (state.status || "to keep your progress in step across devices") + '</span>';
+      '<span class="acct-note">' + (state.status || "to keep your progress in step across devices") +
+      ' · <a href="#/privacy">what’s stored</a></span>';
     document.getElementById("tjSignIn").addEventListener("click", signIn);
     return;
   }
@@ -77,10 +78,98 @@ function draw() {
   el.innerHTML =
     '<span class="acct-who">' + esc(name) + '</span>' +
     '<span class="acct-sync">' + esc(state.status || "Synced") + '</span>' +
-    '<button class="acct-link" id="tjSignOut">Sign out</button>';
+    '<button class="acct-link" id="tjSignOut">Sign out</button>' +
+    '<a class="acct-link" href="#/privacy">Your data</a>';
   document.getElementById("tjSignOut").addEventListener("click", function () {
     fb.signOut(fb.auth);
   });
+}
+
+/* ── privacy page: delete account ────────── */
+// app.js draws a signed-out version of #data-controls (reset this browser).
+// When someone is signed in, this replaces it, because only this file holds the
+// Firebase session needed to delete the cloud record and the account.
+function drawPrivacy() {
+  const el = document.getElementById("data-controls");
+  if (!el || !configured || !state.ready) return;
+
+  if (!state.user) {
+    // Firebase announces the sign-out and this page redraws in no fixed order,
+    // so the notice stays up until the next sign-in rather than showing once.
+    if (state.justDeleted) {
+      el.insertAdjacentHTML("afterbegin",
+        '<p class="done-msg">Your account and progress have been deleted.</p>');
+    }
+    return;
+  }
+
+  const who = state.user.displayName && state.user.email
+    ? esc(state.user.displayName) + " (" + esc(state.user.email) + ")"
+    : esc(state.user.email || state.user.displayName || "your Google account");
+  el.innerHTML =
+    '<p>You’re signed in as <strong>' + who + '</strong>. Your scores are saved to this account.</p>' +
+    '<button class="danger" id="tjDelete">Delete my account and progress</button>' +
+    '<div class="confirm hide" id="tjDeleteConfirm">' +
+      '<p>This permanently deletes your saved scores and your sign-in account for this site. ' +
+        'It also clears the scores saved in this browser. It can’t be undone.</p>' +
+      '<div class="confirm-row"><button class="danger" id="tjDeleteYes">Yes, delete everything</button>' +
+      '<button class="nav-btn" id="tjDeleteNo">Cancel</button></div></div>' +
+    '<p class="fine" id="tjDeleteMsg"></p>';
+
+  const btn = document.getElementById("tjDelete"), box = document.getElementById("tjDeleteConfirm");
+  btn.addEventListener("click", function () { box.classList.remove("hide"); btn.classList.add("hide"); });
+  document.getElementById("tjDeleteNo").addEventListener("click", function () {
+    box.classList.add("hide"); btn.classList.remove("hide");
+  });
+  document.getElementById("tjDeleteYes").addEventListener("click", deleteEverything);
+}
+
+function privacyMsg(text) {
+  const m = document.getElementById("tjDeleteMsg");
+  if (m) m.textContent = text;
+}
+
+async function deleteEverything() {
+  const user = fb.auth.currentUser;
+  if (!user) return;
+  const yes = document.getElementById("tjDeleteYes");
+  if (yes) yes.disabled = true;
+  privacyMsg("Deleting…");
+
+  // The cloud record goes first, while the session can still prove who owns
+  // it. If this fails nothing has been removed, and it is safe to try again.
+  try {
+    await fb.deleteDoc(fb.doc(fb.db, "progress", user.uid));
+  } catch (e) {
+    if (yes) yes.disabled = false;
+    return privacyMsg("Couldn’t reach the database, so nothing was deleted. Check your connection and try again.");
+  }
+
+  // Google makes deleting an account require a recent sign-in. If this one is
+  // too old, ask once more, then retry.
+  try {
+    await fb.deleteUser(user);
+  } catch (e) {
+    if (e && e.code === "auth/requires-recent-login") {
+      try {
+        privacyMsg("For security, Google needs you to confirm it’s you…");
+        await fb.reauthenticateWithPopup(user, new fb.GoogleAuthProvider());
+        await fb.deleteUser(user);
+      } catch (e2) {
+        if (yes) yes.disabled = false;
+        return privacyMsg("Your scores were deleted, but the sign-in account wasn’t. Sign in again and repeat this to finish.");
+      }
+    } else {
+      if (yes) yes.disabled = false;
+      return privacyMsg("Your scores were deleted, but the sign-in account wasn’t. Sign in again and repeat this to finish.");
+    }
+  }
+
+  // Clear this browser's copy too: left in place, the next sign-in here would
+  // upload it straight back.
+  try { localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ }
+  state.justDeleted = true;
+  document.dispatchEvent(new CustomEvent("tj:progress-updated"));
 }
 
 /* ── sync ────────────────────────────────── */
@@ -135,12 +224,16 @@ async function start() {
       auth: auth.getAuth(fapp), db: fs.getFirestore(fapp),
       GoogleAuthProvider: auth.GoogleAuthProvider, signInWithPopup: auth.signInWithPopup,
       signInWithRedirect: auth.signInWithRedirect, signOut: auth.signOut,
-      doc: fs.doc, getDoc: fs.getDoc, setDoc: fs.setDoc, serverTimestamp: fs.serverTimestamp,
+      deleteUser: auth.deleteUser, reauthenticateWithPopup: auth.reauthenticateWithPopup,
+      doc: fs.doc, getDoc: fs.getDoc, setDoc: fs.setDoc, deleteDoc: fs.deleteDoc,
+      serverTimestamp: fs.serverTimestamp,
     };
     auth.getRedirectResult(fb.auth).catch(function () { /* nothing pending */ });
     auth.onAuthStateChanged(fb.auth, function (user) {
       state.user = user; state.busy = false; state.ready = true;
+      if (user) state.justDeleted = false;
       setStatus(user ? "Syncing…" : "");
+      document.dispatchEvent(new CustomEvent("tj:auth-changed"));
       if (user) pullAndMerge();
     });
   } catch (e) {
@@ -151,6 +244,7 @@ async function start() {
 }
 
 document.addEventListener("tj:hub-rendered", draw);
+document.addEventListener("tj:privacy-rendered", drawPrivacy);
 document.addEventListener("tj:progress-saved", function () { if (state.user) pullAndMerge(); });
 // Coming back to the tab is when another device's progress matters most.
 let lastPull = 0;

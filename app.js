@@ -28,10 +28,18 @@
     document.dispatchEvent(new CustomEvent("tj:progress-saved"));
   }
 
-  // sync.js merged another device's scores into local storage: redraw the hub
-  // so the new scores show, but never yank the learner out of a drill.
+  // Which screen is up, so background updates redraw the right one and never
+  // pull the learner out of a drill.
+  var VIEW = "hub";
+
+  // sync.js changed local scores (merged another device, or deleted an
+  // account): redraw whatever page shows them.
   document.addEventListener("tj:progress-updated", function () {
-    if (!S) renderHub();
+    if (VIEW === "hub") renderHub(); else if (VIEW === "privacy") renderPrivacy();
+  });
+  // Signing in or out changes what the privacy page offers.
+  document.addEventListener("tj:auth-changed", function () {
+    if (VIEW === "privacy") renderPrivacy();
   });
 
   /* ── course sections, in playlist order ───── */
@@ -114,6 +122,7 @@
 
   /* ── hub ────────────────────────────────── */
   function renderHub() {
+    VIEW = "hub";
     var p = loadProgress();
     var byEp = {};
     UNITS.forEach(function (u) { byEp[u.ep] = u; });
@@ -185,7 +194,8 @@
     });
 
     html += '<p class="hub-foot">A companion, not a substitute — the lessons are the Shaykh\'s.<br>' +
-      'Answers are independently checked; any error here is ours, not his.</p>';
+      'Answers are independently checked; any error here is ours, not his.<br>' +
+      '<a href="#/privacy">About and privacy</a></p>';
 
     root.innerHTML = html;
     root.querySelectorAll(".unit, .cont-go").forEach(function (b) {
@@ -226,6 +236,7 @@
     var unit = null;
     UNITS.forEach(function (u) { if (u.ep === ep) unit = u; });
     if (!unit) { location.hash = "#/"; return; }
+    VIEW = "unit";
     S = newAttempt(unit);
     renderStart();
   }
@@ -498,8 +509,88 @@
 
   /* ── routing ────────────────────────────── */
   function route() {
-    var m = /^#\/u\/(\d+)/.exec(location.hash || "");
-    if (m) renderUnit(parseInt(m[1], 10)); else { S = null; renderHub(); }
+    var h = location.hash || "";
+    var m = /^#\/u\/(\d+)/.exec(h);
+    if (m) renderUnit(parseInt(m[1], 10));
+    else if (h === "#/privacy") { S = null; renderPrivacy(); }
+    else { S = null; renderHub(); }
+  }
+
+  /* ── about and privacy ──────────────────── */
+  // The data-controls block below is the signed-out version: it can only reset
+  // this browser's copy. When someone is signed in, sync.js replaces it with
+  // the control that deletes their account and cloud record, because only
+  // sync.js holds the Firebase session.
+  function renderPrivacy() {
+    VIEW = "privacy";
+    var p = loadProgress(), saved = Object.keys(p).length;
+    var local = saved
+      ? '<p>You’re not signed in, so your scores are saved only in this browser.</p>' +
+        '<button class="danger" id="resetLocal">Reset progress on this device</button>' +
+        '<div class="confirm hide" id="resetConfirm">' +
+          '<p>This clears every score saved in this browser. It can’t be undone.</p>' +
+          '<div class="confirm-row"><button class="danger" id="resetYes">Yes, reset</button>' +
+          '<button class="nav-btn" id="resetNo">Cancel</button></div></div>'
+      : '<p>No progress is saved in this browser.</p>';
+
+    root.innerHTML =
+      '<div class="bar"><button class="back" id="btnBack">‹ All units</button></div>' +
+      '<div class="card prose">' +
+        '<h1>About and privacy</h1>' +
+        '<p class="lead">Tajweed Companion is a set of short drills to go with Dr. Ayman Rushdi ' +
+          'Swaid’s video commentary on <span class="ar">التجويد المصور</span>. It is an ' +
+          'independent study aid, not affiliated with Dr. Ayman or his team. The lessons are his.</p>' +
+
+        '<h2>How accurate is it?</h2>' +
+        '<p>Every question was checked twice by AI against the text of the muṣḥaf and of ' +
+          '<span class="ar">المقدمة الجزرية</span>. It has not been reviewed by a qualified teacher. ' +
+          'If anything here disagrees with your teacher, follow your teacher.</p>' +
+
+        '<h2>What is stored</h2>' +
+        '<p><strong>If you don’t sign in:</strong> your scores are saved in this browser only. ' +
+          'Nothing is sent anywhere.</p>' +
+        '<p><strong>If you sign in with Google:</strong></p>' +
+        '<ul>' +
+          '<li>your Google name, email address and account ID, which Google’s Firebase service ' +
+            'keeps so you can sign in;</li>' +
+          '<li>your best score and number of attempts for each unit, kept in a database in ' +
+            'London so they appear on all your devices.</li>' +
+        '</ul>' +
+        '<p>That is all. There are no analytics, no ads and no tracking, and nothing is sold or shared.</p>' +
+
+        '<h2>Who can see it</h2>' +
+        '<p>Only you, and the person who runs this site, who can see sign-in accounts and scores ' +
+          'in the Firebase console.</p>' +
+        '<p>The page also loads its fonts from Google Fonts, signs you in through Google, and ' +
+          'links to YouTube for each episode. Those are Google services and follow ' +
+          '<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google’s privacy policy</a>.</p>' +
+
+        '<h2>Delete your data</h2>' +
+        '<div class="data-controls" id="data-controls">' + local + '</div>' +
+        '<p class="fine">Deleting takes effect straight away. Progress saved in another browser ' +
+          'stays there until you reset it on that device, and signing in there would upload it again.</p>' +
+
+        '<p class="fine">Questions or problems: <a href="https://github.com/9ali-oop/tajweed-companion/issues" ' +
+          'target="_blank" rel="noopener">github.com/9ali-oop/tajweed-companion</a>. ' +
+          'Last updated 24 September 2026.</p>' +
+      '</div>';
+
+    document.getElementById("btnBack").addEventListener("click", function () { location.hash = "#/"; });
+    var reset = document.getElementById("resetLocal");
+    if (reset) {
+      var box = document.getElementById("resetConfirm");
+      reset.addEventListener("click", function () { box.classList.remove("hide"); reset.classList.add("hide"); });
+      document.getElementById("resetNo").addEventListener("click", function () {
+        box.classList.add("hide"); reset.classList.remove("hide");
+      });
+      document.getElementById("resetYes").addEventListener("click", function () {
+        try { localStorage.removeItem(KEY); } catch (e) {}
+        document.getElementById("data-controls").innerHTML =
+          '<p class="done-msg">Progress on this device has been reset.</p>';
+      });
+    }
+    window.scrollTo(0, 0);
+    document.dispatchEvent(new CustomEvent("tj:privacy-rendered"));
   }
   window.addEventListener("hashchange", route);
 

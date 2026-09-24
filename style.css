@@ -227,3 +227,27 @@ svg.flow{display:block;width:100%;height:78px;margin:.3rem 0 .2rem}
 
 .start-en{margin:0 0 .9rem;color:var(--ink-faint);font-size:.95rem}
 .watch{font-weight:600;text-underline-offset:2px}
+
+/* ── about and privacy ────────────────────── */
+.prose h1{margin-bottom:.6rem}
+.prose h2{font-size:1.05rem;margin:1.4rem 0 .45rem;font-weight:700;color:var(--ink)}
+.prose p{max-width:62ch}
+.prose ul{margin:0 0 .85rem;padding-left:1.15rem;color:var(--ink-soft)}
+.prose li{margin-bottom:.35rem}
+.prose a{text-underline-offset:2px}
+.prose .fine{font-size:.85rem;color:var(--ink-faint)}
+
+.data-controls{background:var(--sunk);border-radius:16px;padding:.95rem 1rem;margin:0 0 .8rem}
+.data-controls p{margin:0 0 .7rem}
+.data-controls p:last-child{margin-bottom:0}
+.danger{background:var(--bad-bg);color:var(--bad);font-weight:700;padding:.7rem 1rem;
+  border:2px solid transparent}
+.danger:hover:not(:disabled){border-color:var(--bad)}
+.danger:disabled{opacity:.5;cursor:default}
+.confirm{margin-top:.2rem}
+.confirm-row{display:flex;flex-wrap:wrap;gap:.5rem}
+.confirm-row .nav-btn{flex:0 0 auto;padding:.7rem 1rem}
+.done-msg{color:var(--good);font-weight:700}
+.hub-foot a{font-weight:600}
+.acct-note a{text-underline-offset:2px}
+.account a.acct-link{display:inline-block}
