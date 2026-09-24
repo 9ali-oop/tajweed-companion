@@ -511,7 +511,9 @@
       (q.bigArabic ? '<div class="big-letter ar">' + esc(q.bigArabic) + '</div>' : '') +
       (q.ayah ? '<div class="ayah ar">' + esc(q.ayah) + '</div>' +
                 '<div class="ref-row"><span class="ref">' + esc(q.ref || "") + '</span>' +
-                (ayahAudio(q.ref) ? '<button class="play" data-src="' + ayahAudio(q.ref) + '" ' +
+                // Only once answered: hearing the āya first would answer
+                // "is the rāʾ heavy here?" for the learner.
+                (a && ayahAudio(q.ref) ? '<button class="play" data-src="' + ayahAudio(q.ref) + '" ' +
                   'aria-label="Listen to the āya, recited by al-Ḥuṣarī">▶ Listen</button>' : '') +
                 '</div>' : '') +
       (q.verseStem ? '<div class="verse-q ar">' + esc(q.verseStem) + ' <span class="blank"></span></div>' : '');
