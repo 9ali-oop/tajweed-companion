@@ -59,31 +59,72 @@ const G_MARK =
   '<path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.8-6z"/>' +
   '<path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.8 6C6.6 42.6 14.6 48 24 48z"/></svg>';
 
+// Two places on the hub: a compact control in the header's top-right corner
+// (#account), and one line inside the progress card saying where the scores
+// live (#syncNote) — the explanation sits next to the thing it explains.
 function draw() {
   const el = document.getElementById("account");
+  const note = document.getElementById("syncNote");
   if (!el) return;
-  if (!configured || !state.ready) { el.innerHTML = ""; return; }
-
-  if (!state.user) {
-    el.innerHTML =
-      '<button class="signin" id="tjSignIn"' + (state.busy ? " disabled" : "") + '>' + G_MARK +
-        (state.busy ? "Signing in…" : "Sign in with Google") + '</button>' +
-      '<span class="acct-note">' + (state.status || "to keep your progress in step across devices") +
-      ' · <a href="#/privacy">what’s stored</a></span>';
-    document.getElementById("tjSignIn").addEventListener("click", signIn);
+  if (!configured || !state.ready) {
+    el.innerHTML = "";
+    if (note) note.innerHTML = "";
     return;
   }
 
-  const name = state.user.displayName || state.user.email || "your account";
+  if (!state.user) {
+    el.innerHTML =
+      '<button class="signin" id="tjSignIn"' + (state.busy ? " disabled" : "") +
+        ' aria-label="Sign in with Google">' + G_MARK +
+        '<span>' + (state.busy ? "Signing in…" : "Sign in") + '</span></button>';
+    document.getElementById("tjSignIn").addEventListener("click", signIn);
+    if (note) {
+      note.innerHTML = state.status
+        ? esc(state.status)
+        : 'Saved on this device only. Sign in with Google to keep it in step across your ' +
+          'devices · <a href="#/privacy">what’s stored</a>';
+    }
+    return;
+  }
+
+  const full = state.user.displayName || state.user.email || "Account";
+  const first = full.split(/[\s@]/)[0] || full;
   el.innerHTML =
-    '<span class="acct-who">' + esc(name) + '</span>' +
-    '<span class="acct-sync">' + esc(state.status || "Synced") + '</span>' +
-    '<button class="acct-link" id="tjSignOut">Sign out</button>' +
-    '<a class="acct-link" href="#/privacy">Your data</a>';
+    '<button class="acct-chip" id="tjAcct" aria-haspopup="true" aria-expanded="false" ' +
+      'aria-label="Account: ' + esc(full) + '">' +
+      '<span class="acct-avatar" aria-hidden="true">' + esc(first.charAt(0).toUpperCase()) + '</span>' +
+      '<span class="acct-name">' + esc(first) + '</span><span class="acct-caret" aria-hidden="true">▾</span>' +
+    '</button>' +
+    '<div class="acct-menu hide" id="tjAcctMenu" role="menu">' +
+      '<div class="acct-full">' + esc(full) + '</div>' +
+      '<a role="menuitem" href="#/privacy">Your data</a>' +
+      '<button role="menuitem" id="tjSignOut">Sign out</button>' +
+    '</div>';
+  const chip = document.getElementById("tjAcct"), menu = document.getElementById("tjAcctMenu");
+  chip.addEventListener("click", function (e) {
+    e.stopPropagation();
+    const open = menu.classList.toggle("hide") === false;
+    chip.setAttribute("aria-expanded", String(open));
+  });
   document.getElementById("tjSignOut").addEventListener("click", function () {
     fb.signOut(fb.auth);
   });
+  if (note) {
+    const s = state.status || "Synced";
+    note.innerHTML = s === "Synced"
+      ? '<span class="ok">✓</span> Synced across your devices · <a href="#/privacy">what’s stored</a>'
+      : esc(s);
+  }
 }
+// Close the account menu on any click elsewhere.
+document.addEventListener("click", function (e) {
+  const menu = document.getElementById("tjAcctMenu");
+  if (menu && !menu.classList.contains("hide") && !menu.contains(e.target)) {
+    menu.classList.add("hide");
+    const chip = document.getElementById("tjAcct");
+    if (chip) chip.setAttribute("aria-expanded", "false");
+  }
+});
 
 /* ── privacy page: delete account ────────── */
 // app.js draws a signed-out version of #data-controls (reset this browser).

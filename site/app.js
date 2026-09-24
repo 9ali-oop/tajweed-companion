@@ -158,13 +158,15 @@
 
     var html =
       '<div class="hub-head">' +
-        '<h1>Tajweed Companion</h1>' +
-        '<p class="sub">Drills for <span class="ar">شرح كتاب التجويد المصور</span> — ' +
-        'د. أيمن رشدي سويد. One short unit per episode.</p>' +
+        // sync.js fills #account (top right) and #syncNote (in the progress card).
+        '<div class="hub-top"><h1>Tajweed Companion</h1><div class="account" id="account"></div></div>' +
+        // The name is its own isolated Arabic run; mixed into the English
+        // sentence, its full stop drifted to the wrong end.
+        '<p class="sub">Drills for <span class="ar">شرح كتاب التجويد المصور</span> by ' +
+        '<span class="ar">د. أيمن رشدي سويد</span>. One short unit per episode.</p>' +
         (window.PLAYLIST ? '<a class="playlist" href="' + window.PLAYLIST + '" target="_blank" rel="noopener">' +
           '<span class="pl-icon" aria-hidden="true">▶</span><span><strong>Watch the course on YouTube</strong>' +
           '<small>' + CATALOGUE.length + ' episodes, in order</small></span></a>' : '') +
-        '<div class="account" id="account"></div>' +
         continueCard(p) +
         '<div class="overall">' +
           '<div class="row"><span class="big">' + gotQ + ' / ' + totalQ + '</span>' +
@@ -174,6 +176,7 @@
           '<p style="margin:.7rem 0 0;font-size:.84rem;color:var(--ink-faint)">' +
             UNITS.length + ' of ' + CATALOGUE.length + ' units ready. More are added as the ' +
             'series goes on.</p>' +
+          '<p class="sync-note" id="syncNote"></p>' +
         '</div>' +
       '</div>';
 
