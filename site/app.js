@@ -161,6 +161,9 @@
         '<h1>Tajweed Companion</h1>' +
         '<p class="sub">Drills for <span class="ar">شرح كتاب التجويد المصور</span> — ' +
         'د. أيمن رشدي سويد. One short unit per episode.</p>' +
+        (window.PLAYLIST ? '<a class="playlist" href="' + window.PLAYLIST + '" target="_blank" rel="noopener">' +
+          '<span class="pl-icon" aria-hidden="true">▶</span><span><strong>Watch the course on YouTube</strong>' +
+          '<small>' + CATALOGUE.length + ' episodes, in order</small></span></a>' : '') +
         '<div class="account" id="account"></div>' +
         continueCard(p) +
         '<div class="overall">' +
