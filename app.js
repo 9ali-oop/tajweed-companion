@@ -34,13 +34,55 @@
     if (!S) renderHub();
   });
 
-  /* ── chapter families (colour + grouping) ── */
-  function family(t) {
-    t = t || "";
-    if (t.indexOf("مخارج") > -1) return { key: "makharij", label: "Points of articulation · المخارج", color: "var(--flow)" };
-    if (t.indexOf("صفات") > -1 || t.indexOf("قلقلة") > -1) return { key: "sifat", label: "Letter characteristics · الصفات", color: "var(--stop)" };
-    if (t.indexOf("مقدمة") > -1) return { key: "intro", label: "Foundations · المقدمة", color: "var(--brand)" };
-    return { key: "other", label: "Further topics", color: "var(--between)" };
+  /* ── course sections, in playlist order ───── */
+  // Every episode is listed 1..N in the order the playlist teaches it; a
+  // heading only marks where the course moves to a new topic. Grouping by
+  // keyword instead pulled episodes out of sequence (9 and 14 landed after 16,
+  // 21 after 2), which fought anyone watching along. Ranges live in
+  // catalogue_meta.json; build_data.py checks they cover every episode.
+  var SECTIONS = (window.SECTIONS && window.SECTIONS.length) ? window.SECTIONS
+    : [{ from: 1, to: CATALOGUE.length, en: "Episodes", ar: "", tone: "brand" }];
+  var CAT_BY_EP = {};
+  CATALOGUE.forEach(function (c) { CAT_BY_EP[c.ep] = c; });
+
+  function toneColor(t) {
+    return (t === "stop" || t === "between" || t === "flow") ? "var(--" + t + ")" : "var(--brand)";
+  }
+
+  // "Continue" picks up after the furthest unit this learner has finished.
+  // Someone following the playlist moves forward in order, so the furthest
+  // finished unit is where they are in the course.
+  function nextUp(p) {
+    var ready = {}, furthest = 0;
+    UNITS.forEach(function (u) { ready[u.ep] = u; });
+    Object.keys(p).forEach(function (k) { var e = +k; if (ready[e] && e > furthest) furthest = e; });
+    for (var i = 0; i < CATALOGUE.length; i++) {
+      var c = CATALOGUE[i];
+      if (c.ep > furthest) return { c: c, u: ready[c.ep] || null, fresh: furthest === 0 };
+    }
+    return null;
+  }
+
+  function continueCard(p) {
+    var n = nextUp(p);
+    if (!n) {
+      return '<div class="cont soon"><span class="cont-label">All done</span>' +
+        '<div class="cont-title">You’ve finished every unit in the series.</div></div>';
+    }
+    var c = n.c, u = n.u;
+    var watch = '<a class="cont-watch" href="' + c.url + '" target="_blank" rel="noopener">Watch episode ' +
+      c.ep + ' ↗</a>';
+    if (!u) {
+      return '<div class="cont soon"><span class="cont-label">You’re up to date</span>' +
+        '<div class="cont-title">Unit ' + c.ep + ' isn’t ready yet</div>' +
+        '<div class="cont-sub">' + esc(c.topic_en) + '</div>' +
+        '<div class="cont-actions">' + watch + '</div></div>';
+    }
+    return '<div class="cont"><span class="cont-label">' + (n.fresh ? "Start here" : "Continue") + '</span>' +
+      '<div class="cont-title">Unit ' + c.ep + ' · ' + esc(u.title_en) + '</div>' +
+      '<div class="cont-sub ar">' + esc(c.topic) + '</div>' +
+      '<div class="cont-actions"><button class="cont-go" data-ep="' + c.ep + '">' +
+        (n.fresh ? "Start unit " : "Go to unit ") + c.ep + '</button>' + watch + '</div></div>';
   }
 
   /* ── airflow diagram (used where a unit asks for it) ── */
@@ -83,22 +125,13 @@
       if (r) { gotQ += r.best; if (r.best === u.questions.length) completed++; }
     });
 
-    // The hub lists the whole series, so an episode without a ready unit still
-    // shows up — the learner can see where they are in the course, not just
-    // which drills happen to exist yet.
-    var groups = [], seen = {};
-    CATALOGUE.forEach(function (c) {
-      var f = family(c.topic);
-      if (!seen[f.key]) { seen[f.key] = { fam: f, items: [] }; groups.push(seen[f.key]); }
-      seen[f.key].items.push(c);
-    });
-
     var html =
       '<div class="hub-head">' +
         '<h1>Tajweed Companion</h1>' +
         '<p class="sub">Drills for <span class="ar">شرح كتاب التجويد المصور</span> — ' +
         'د. أيمن رشدي سويد. One short unit per episode.</p>' +
         '<div class="account" id="account"></div>' +
+        continueCard(p) +
         '<div class="overall">' +
           '<div class="row"><span class="big">' + gotQ + ' / ' + totalQ + '</span>' +
           '<span class="cap">' + completed + ' of ' + UNITS.length + ' ready units aced</span></div>' +
@@ -110,9 +143,17 @@
         '</div>' +
       '</div>';
 
-    groups.forEach(function (g) {
-      html += '<div class="chapter">' + g.fam.label + '</div><div class="units">';
-      g.items.forEach(function (c) {
+    // The bold line is the drill's own name; under the Arabic chapter title
+    // sits a plain translation of it, so nobody mistakes one for the other.
+    SECTIONS.forEach(function (s) {
+      var items = CATALOGUE.filter(function (c) { return c.ep >= s.from && c.ep <= s.to; });
+      if (!items.length) return;
+      var color = toneColor(s.tone);
+      html += '<div class="chapter"><span>' + esc(s.en) +
+        (s.ar ? ' · <span class="ar">' + esc(s.ar) + '</span>' : '') + '</span>' +
+        '<span class="range">' + (s.from === s.to ? s.from : s.from + '–' + s.to) + '</span></div>' +
+        '<div class="units">';
+      items.forEach(function (c) {
         var u = byEp[c.ep];
         if (u) {
           var r = p[c.ep], n = u.questions.length;
@@ -122,18 +163,20 @@
             else { cls = "part"; txt = r.best + "/" + n; }
           }
           html +=
-            '<button class="unit" style="--fam:' + g.fam.color + '" data-ep="' + c.ep + '">' +
+            '<button class="unit" style="--fam:' + color + '" data-ep="' + c.ep + '">' +
               '<span class="n">' + c.ep + '</span>' +
               '<span class="body"><span class="t">' + esc(u.title_en) + '</span>' +
-              '<span class="t-ar ar">' + esc(c.topic) + '</span></span>' +
+              '<span class="t-ar ar">' + esc(c.topic) + '</span>' +
+              '<span class="t-en">' + esc(c.topic_en) + '</span></span>' +
               '<span class="state ' + cls + '">' + txt + '</span>' +
             '</button>';
         } else {
           html +=
-            '<button class="unit" style="--fam:' + g.fam.color + '" disabled>' +
+            '<button class="unit" style="--fam:' + color + '" disabled>' +
               '<span class="n">' + c.ep + '</span>' +
-              '<span class="body"><span class="t">' + c.minutes + ' min lesson</span>' +
-              '<span class="t-ar ar">' + esc(c.topic) + '</span></span>' +
+              '<span class="body"><span class="t">' + esc(c.topic_en) + '</span>' +
+              '<span class="t-ar ar">' + esc(c.topic) + '</span>' +
+              '<span class="t-en">' + c.minutes + ' min lesson</span></span>' +
               '<span class="state">soon</span>' +
             '</button>';
         }
@@ -145,7 +188,7 @@
       'Answers are independently checked; any error here is ours, not his.</p>';
 
     root.innerHTML = html;
-    root.querySelectorAll(".unit").forEach(function (b) {
+    root.querySelectorAll(".unit, .cont-go").forEach(function (b) {
       b.addEventListener("click", function () { location.hash = "#/u/" + b.dataset.ep; });
     });
     window.scrollTo(0, 0);
@@ -214,9 +257,12 @@
     var u = S.unit;
     mount(
       '<h1>' + esc(u.title_en) + '</h1>' +
-      '<p class="ar" style="font-size:1.5rem;color:var(--ink-soft);margin:-.2rem 0 .8rem">' + esc(u.title_ar) + '</p>' +
+      '<p class="ar" style="font-size:1.5rem;color:var(--ink-soft);margin:-.2rem 0 .2rem">' + esc(u.title_ar) + '</p>' +
+      (CAT_BY_EP[u.ep] ? '<p class="start-en">' + esc(CAT_BY_EP[u.ep].topic_en) + '</p>' : '') +
       '<p class="lead">' + esc(u.summary) + '</p>' +
       '<p>' + u.teach.length + ' quick cards, then ' + u.questions.length + ' questions. About four minutes.</p>' +
+      (u.url ? '<p><a class="watch" href="' + u.url + '" target="_blank" rel="noopener">▶ Watch episode ' +
+        u.ep + ' on YouTube</a></p>' : '') +
       '<button class="cta" id="go">Start</button>' +
       '<button class="ghost" id="skip">Skip to the questions</button>', false);
     setBar(0, 1);
