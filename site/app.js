@@ -752,6 +752,31 @@
   }
   window.addEventListener("hashchange", route);
 
+  /* ── scores carried over from the old address ── */
+  // The site moved from GitHub Pages to its own address, and browsers keep
+  // saved scores per address. The old page forwards them in the fragment
+  // (#carry=…&to=…), which never reaches a server. Merge them the way sync.js
+  // merges devices — best score wins, runs take the larger count — then put
+  // the address back to the route the visitor was on.
+  function importCarried() {
+    var m = /^#carry=([^&]*)(?:&to=(.*))?$/.exec(location.hash);
+    if (!m) return;
+    try {
+      var incoming = JSON.parse(decodeURIComponent(m[1])) || {}, p = loadProgress();
+      Object.keys(incoming).forEach(function (k) {
+        var r = incoming[k], n = function (x) { return typeof x === "number" && x >= 0 ? x : 0; };
+        if (!/^\d{1,2}$/.test(k) || !r || typeof r !== "object") return;
+        var l = p[k] || {};
+        p[k] = { best: Math.max(n(l.best), n(r.best)), total: Math.max(n(l.total), n(r.total)),
+                 runs: Math.max(n(l.runs), n(r.runs)) };
+      });
+      saveProgress(p);
+    } catch (e) { /* malformed: nothing to carry */ }
+    var to = m[2] ? decodeURIComponent(m[2]) : "/";
+    history.replaceState(null, "", location.pathname + "#" + (to.charAt(0) === "/" ? to : "/"));
+  }
+  importCarried();
+
   if (!CATALOGUE.length && !UNITS.length) {
     root.innerHTML = '<div class="card"><h1>Couldn’t load the drills</h1>' +
       '<p>Refresh the page to try again.</p></div>';

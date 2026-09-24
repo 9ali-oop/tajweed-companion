@@ -9,7 +9,7 @@
 // site falls back to keeping progress per device.
 window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyAOEcbMB6ZIRB2SMNtV6Boh6PU9B06GzpY",
-  authDomain: "tajweed-companion.firebaseapp.com",
+  authDomain: "tajweed-companion.web.app",
   projectId: "tajweed-companion",
   appId: "1:869722736392:web:96f997c5ab7b0a24bf8ebd"
 };

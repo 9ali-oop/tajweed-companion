@@ -4,7 +4,7 @@ Short interactive drills accompanying Dr. Ayman Rushdi Swaid's 45-part video
 commentary on **التجويد المصور**. One unit per episode: a few teaching cards,
 then ten to thirteen questions, about four minutes.
 
-**Live:** https://9ali-oop.github.io/tajweed-companion/
+**Live:** https://tajweed-companion.web.app/
 
 ## What this is, and is not
 

@@ -3,31 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
 <title>Tajweed Companion</title>
-<meta name="description" content="Short interactive drills accompanying Dr. Ayman Rushdi Swaid's video commentary on التجويد المصور. One unit per episode.">
-<meta name="theme-color" content="#5B3FD6">
-<link rel="icon" type="image/png" href="favicon.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://tajweed-companion.web.app/">
+<link rel="icon" type="image/png" href="site/favicon.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Tajweed Companion">
 <meta property="og:title" content="Tajweed Companion">
 <meta property="og:description" content="Short, game-like drills for each episode of Dr. Ayman Swaid's tajweed course, التجويد المصور.">
-<meta property="og:url" content="https://9ali-oop.github.io/tajweed-companion/">
-<meta property="og:image" content="https://9ali-oop.github.io/tajweed-companion/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://tajweed-companion.web.app/">
+<meta property="og:image" content="https://tajweed-companion.web.app/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Outfit:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=12">
+<script>
+/* The site moved to its own address. Browsers keep saved scores per address,
+   so this page forwards the ones saved here in the URL fragment, which is
+   never sent to any server; the app merges them (best score wins) and clears
+   the fragment. The route (#/u/5 etc.) comes along too. */
+(function () {
+  var to = "https://tajweed-companion.web.app/";
+  var route = location.hash.replace(/^#/, ""), saved = null;
+  try { saved = localStorage.getItem("tajweed-companion-v1"); } catch (e) {}
+  var frag = saved && saved !== "{}"
+    ? "#carry=" + encodeURIComponent(saved) + (route ? "&to=" + encodeURIComponent(route) : "")
+    : (route ? "#" + route : "");
+  location.replace(to + frag);
+})();
+</script>
+<noscript><meta http-equiv="refresh" content="0;url=https://tajweed-companion.web.app/"></noscript>
+<style>body{font:17px/1.5 system-ui,sans-serif;background:#F4F1FA;color:#1A1633;display:grid;place-items:center;min-height:90vh;margin:0}a{color:#5B3FD6;font-weight:600}</style>
 </head>
 <body>
-<div class="app" id="app"></div>
-<script src="data.js?v=12"></script>
-<script src="app.js?v=12"></script>
-<script src="firebase-config.js?v=12"></script>
-<script type="module" src="sync.js?v=12"></script>
+<p>Tajweed Companion has moved to <a href="https://tajweed-companion.web.app/">tajweed-companion.web.app</a>.</p>
 </body>
 </html>
