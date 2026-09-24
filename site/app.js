@@ -32,6 +32,27 @@
   // pull the learner out of a drill.
   var VIEW = "hub";
 
+  /* ── offline and install ───────────────── */
+  // sw.js keeps the page and every unit available offline after one visit.
+  if ("serviceWorker" in navigator &&
+      (location.protocol === "https:" || location.hostname === "localhost")) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () { /* unsupported host */ });
+    });
+  }
+  // Chrome, Edge and Android offer an install prompt a page can trigger;
+  // Safari has none (it is Share → Add to Home Screen), so the button only
+  // appears where it will work. Toggled in place, so the hub never jumps.
+  var installEvt = null;
+  function showInstall() {
+    var b = document.getElementById("btnInstall");
+    if (b) b.classList.toggle("hide", !installEvt);
+  }
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault(); installEvt = e; showInstall();
+  });
+  window.addEventListener("appinstalled", function () { installEvt = null; showInstall(); });
+
   // sync.js changed local scores (merged another device, or deleted an
   // account): redraw whatever page shows them.
   document.addEventListener("tj:progress-updated", function () {
@@ -194,6 +215,8 @@
       html += "</div>";
     });
 
+    html += '<button class="install' + (installEvt ? '' : ' hide') + '" id="btnInstall">' +
+      '<img src="icon-192.png" alt="" width="28" height="28">Install as an app</button>';
     html += '<p class="hub-foot">A companion, not a substitute — the lessons are the Shaykh’s.<br>' +
       'Answers are independently checked; any error here is ours, not his.<br>' +
       '<a href="#/privacy">About and privacy</a></p>';
@@ -201,6 +224,11 @@
     root.innerHTML = html;
     root.querySelectorAll(".unit, .cont-go").forEach(function (b) {
       b.addEventListener("click", function () { location.hash = "#/u/" + b.dataset.ep; });
+    });
+    document.getElementById("btnInstall").addEventListener("click", function () {
+      if (!installEvt) return;
+      installEvt.prompt();
+      installEvt.userChoice.then(function () { installEvt = null; showInstall(); });
     });
     window.scrollTo(0, 0);
     document.dispatchEvent(new CustomEvent("tj:hub-rendered"));
@@ -698,7 +726,7 @@
           'independent study aid, not affiliated with Dr. Ayman or his team. The lessons are his.</p>' +
 
         '<h2>How accurate is it?</h2>' +
-        '<p>Every question was checked twice by AI against the text of the muṣḥaf and of ' +
+        '<p>Every question was checked twice against the text of the muṣḥaf and of ' +
           '<span class="ar">المقدمة الجزرية</span>. It has not been reviewed by a qualified teacher. ' +
           'If anything here disagrees with your teacher, follow your teacher.</p>' +
 

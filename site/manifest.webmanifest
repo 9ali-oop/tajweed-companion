@@ -1,0 +1,15 @@
+{
+  "name": "Tajweed Companion",
+  "short_name": "Tajweed",
+  "description": "Short, game-like drills for each episode of Dr. Ayman Swaid's tajweed course.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4F1FA",
+  "theme_color": "#5B3FD6",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

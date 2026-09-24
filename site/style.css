@@ -278,3 +278,10 @@ svg.flow{display:block;width:100%;height:78px;margin:.3rem 0 .2rem}
 .gp-en{font-weight:700;margin:.15rem 0 .3rem}
 .gp-def{margin:0;font-size:.92rem;line-height:1.5;color:var(--ink-soft)}
 .gp-def .ar{font-size:1.15em;color:var(--ink)}
+
+/* ── install ────────────────────────────── */
+.install{display:flex;align-items:center;justify-content:center;gap:.6rem;width:100%;
+  margin:1.4rem 0 0;padding:.8rem 1rem;font-weight:600;background:var(--card);
+  border:1.5px solid var(--line);box-shadow:var(--shadow)}
+.install img{border-radius:7px}
+.install.hide{display:none}
