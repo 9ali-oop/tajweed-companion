@@ -18,8 +18,8 @@ it says plainly that you are the judge.
 ## Accuracy
 
 Every unit was drafted from the lesson transcript, then checked by two
-independent reviewers — one on tajweed correctness under حفص عن عاصم, one on
-textual accuracy — before being published. Questions that could not be made
+independent reviewers - one on tajweed correctness under حفص عن عاصم, one on
+textual accuracy - before being published. Questions that could not be made
 unambiguously correct were deleted rather than patched.
 
 That pass was not decorative. Across the units it caught a false claim about
@@ -28,7 +28,7 @@ is sākin in Sūrat ash-Sharḥ, an inverted scholarly attribution, and two
 non-Qurʾānic words cited as Qurʾānic.
 
 Qurʾānic quotations are verified against the Uthmani text at build time, on word
-boundaries — a fragment that begins or ends mid-word is still a substring of its
+boundaries - a fragment that begins or ends mid-word is still a substring of its
 verse, and reads as a real quotation while being a mangled one.
 
 Verses of **المقدمة الجزرية** follow a 109-verse edition. Editions run 107, 108
@@ -51,7 +51,7 @@ your progress.
 | `app.js` | hub, drill engine, progress |
 | `data.js` | `window.CATALOGUE` (all 45 episodes) and `window.UNITS` (the built units) |
 
-No build step and no dependencies beyond Google Fonts — clone it and open
+No build step and no dependencies beyond Google Fonts - clone it and open
 `index.html`, or serve the directory.
 
 `data.js` is generated from per-unit source files kept outside this repo. To add

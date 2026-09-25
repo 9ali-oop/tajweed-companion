@@ -61,7 +61,7 @@ const G_MARK =
 
 // Two places on the hub: a compact control in the header's top-right corner
 // (#account), and one line inside the progress card saying where the scores
-// live (#syncNote) — the explanation sits next to the thing it explains.
+// live (#syncNote) - the explanation sits next to the thing it explains.
 function draw() {
   const el = document.getElementById("account");
   const note = document.getElementById("syncNote");
@@ -232,7 +232,7 @@ async function pullAndMerge() {
     }
     setStatus("Synced");
   } catch (e) {
-    setStatus(navigator.onLine ? "Couldn’t sync — saved on this device" : "Offline — saved on this device");
+    setStatus(navigator.onLine ? "Couldn’t sync - saved on this device" : "Offline - saved on this device");
   }
 }
 
@@ -248,7 +248,7 @@ async function signIn() {
       return fb.signInWithRedirect(fb.auth, provider);
     }
     state.busy = false;
-    setStatus(e && e.code === "auth/popup-closed-by-user" ? "" : "Sign-in didn’t finish — try again");
+    setStatus(e && e.code === "auth/popup-closed-by-user" ? "" : "Sign-in didn’t finish - try again");
   }
 }
 

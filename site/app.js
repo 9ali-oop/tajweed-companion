@@ -1,4 +1,4 @@
-/* Tajweed companion — hub + drill engine.
+/* Tajweed companion - hub + drill engine.
    Content lives in data.js as window.UNITS. Progress lives in localStorage. */
 (function () {
   "use strict";
@@ -223,7 +223,7 @@
 
     html += '<button class="install' + (installEvt ? '' : ' hide') + '" id="btnInstall">' +
       '<img src="icon-192.png" alt="" width="28" height="28">Install as an app</button>';
-    html += '<p class="hub-foot">A companion, not a substitute — the lessons are the Shaykh’s.<br>' +
+    html += '<p class="hub-foot">A companion, not a substitute - the lessons are the Shaykh’s.<br>' +
       'Answers are independently checked; any error here is ours, not his.<br>' +
       '<a href="#/privacy">About and privacy</a></p>';
 
@@ -284,7 +284,7 @@
       sp.tabIndex = 0;
       sp.setAttribute("role", "button");
       sp.setAttribute("aria-expanded", "false");
-      sp.setAttribute("aria-label", sp.textContent + " — " + e.en + ", tap for meaning");
+      sp.setAttribute("aria-label", sp.textContent + " - " + e.en + ", tap for meaning");
     });
   }
 
@@ -354,7 +354,7 @@
     b.setAttribute("aria-label", state === "playing" ? "Stop the recitation" :
       "Listen to the āya, recited by al-Ḥuṣarī");
     b.textContent = state === "playing" ? "■ Stop" : state === "loading" ? "Loading…" :
-      state === "error" ? "Couldn’t play — try again" : "▶ Listen";
+      state === "error" ? "Couldn’t play - try again" : "▶ Listen";
   }
   function stopAudio() {
     if (player) { player.pause(); player.removeAttribute("src"); player.load(); }
@@ -383,7 +383,7 @@
   /* ── drill ──────────────────────────────── */
   // One attempt at a unit. Answers are kept per question so the learner can
   // move back and forth freely: a revisited question shows exactly what was
-  // picked and why, and cannot be re-answered — the score is the first try,
+  // picked and why, and cannot be re-answered - the score is the first try,
   // otherwise going back would become a way to fix answers. Option order is
   // fixed per question for the whole attempt, so going back never reshuffles
   // what the learner has already seen.
@@ -500,7 +500,7 @@
     // correct answers near the top (one unit had 7 of 11 at position 0),
     // which makes a drill tappable without reading it. `data-i` keeps the
     // original index, so grading and the answer key are untouched. Numeric
-    // option sets stay in natural order — a scrambled 0/1/2/3 reads as a bug.
+    // option sets stay in natural order - a scrambled 0/1/2/3 reads as a bug.
     if (S.orders[i]) return S.orders[i];
     var opts = S.unit.questions[i].options || [];
     var order = opts.map(function (_, k) { return k; });
@@ -522,7 +522,7 @@
 
   function feedbackHTML(ok, q) {
     return '<div class="fb ' + (ok ? "good" : "bad") + '">' +
-      '<div class="verdict">' + (ok ? "Correct" : "Not quite — it is " + esc(correctText(q))) + '</div>' +
+      '<div class="verdict">' + (ok ? "Correct" : "Not quite - it is " + esc(correctText(q))) + '</div>' +
       '<div class="why">' + q.why + '</div></div>';
   }
 
@@ -647,10 +647,10 @@
     record(u.ep, score, n, !S.recorded);
     S.recorded = true;
 
-    var html = '<div class="score">' + score + '<small>out of ' + n + ' — ' + verdict + '</small></div>';
+    var html = '<div class="score">' + score + '<small>out of ' + n + ' - ' + verdict + '</small></div>';
     if (skipped) {
       html += '<p class="skipnote">' + skipped + (skipped === 1 ? " question" : " questions") +
-        ' skipped — tap one below to answer it.</p>';
+        ' skipped - tap one below to answer it.</p>';
     }
     if (S.best > 1) {
       html += '<p style="text-align:center;margin:.6rem 0 0;color:var(--between);font-weight:600">Best streak 🔥 ' + S.best + '</p>';
@@ -661,7 +661,7 @@
       html += '<div class="review"><h3>Worth revisiting</h3><ul>' + revisit.map(function (k) {
         var q = u.questions[k], r = S.ans[k];
         return '<li><button class="jump" data-k="' + k + '"><span class="jn">' + (k + 1) + '</span>' +
-          esc(String(q.q).replace(/<[^>]+>/g, "")) + ' — ' +
+          esc(String(q.q).replace(/<[^>]+>/g, "")) + ' - ' +
           (r ? '<strong>' + esc(correctText(q)) + '</strong>' : '<em>not answered</em>') +
           '</button></li>';
       }).join("") + '</ul></div>';
@@ -669,7 +669,7 @@
     html += '<button class="cta" id="again">Drill again</button>' +
       '<button class="ghost" id="review">Review your answers</button>' +
       '<button class="ghost" id="hub">Back to all units</button>' +
-      '<p class="foot">Episode ' + u.ep + ' — <span class="ar">' + esc(u.title_ar) + '</span>' +
+      '<p class="foot">Episode ' + u.ep + ' - <span class="ar">' + esc(u.title_ar) + '</span>' +
       (u.url ? ' · <a href="' + u.url + '" target="_blank" rel="noopener">watch the lesson</a>' : '') + '</p>';
     mount(html, false);
     setBar(1, 1);
@@ -790,7 +790,7 @@
   // The site moved from GitHub Pages to its own address, and browsers keep
   // saved scores per address. The old page forwards them in the fragment
   // (#carry=…&to=…), which never reaches a server. Merge them the way sync.js
-  // merges devices — best score wins, runs take the larger count — then put
+  // merges devices - best score wins, runs take the larger count - then put
   // the address back to the route the visitor was on.
   function importCarried() {
     var m = /^#carry=([^&]*)(?:&to=(.*))?$/.exec(location.hash);
