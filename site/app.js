@@ -225,7 +225,7 @@
       '<img src="icon-192.png" alt="" width="28" height="28">Install as an app</button>';
     html += '<p class="hub-foot">The lessons are the Shaykh’s. These drills are only here to help you review them.<br>' +
       'If you find a mistake, it’s ours.<br>' +
-      '<a href="#/privacy">About and privacy</a></p>';
+      '<a href="#/glossary">Glossary</a> · <a href="#/privacy">About and privacy</a></p>';
 
     root.innerHTML = html;
     root.querySelectorAll(".unit, .cont-go").forEach(function (b) {
@@ -262,29 +262,55 @@
     GLOSS_BY_ID[e.id] = e;
     e.forms.forEach(function (f) { GLOSS[glossKey(f)] = e; });
   });
-  function glossFor(text) {
+  // "plain" entries match only an unvowelled word: بيت is a line of verse,
+  // while بَيْت / ٱلْبَيْتِ in an example is a house. "units" keeps a term to
+  // the chapter where it has that meaning (لازم is a madd in 27+, a stop in 20).
+  var HARAKAT = /[ً-ْ]/;
+  function glossFor(text, ep) {
     var k = glossKey(text);
-    if (GLOSS[k]) return GLOSS[k];
-    return k.indexOf("ال") === 0 ? GLOSS[k.slice(2)] || null : null;
+    var e = GLOSS[k] || (k.indexOf("ال") === 0 ? GLOSS[k.slice(2)] : null);
+    if (!e) return null;
+    if (e.plain && HARAKAT.test(text)) return null;
+    if (e.units && ep && (ep < e.units[0] || ep > e.units[1])) return null;
+    return e;
   }
 
   // First mention of each term per screen only; underlining every repeat
   // turns a paragraph into a page of links. The question's own wording is
   // linked only once it has been answered: "What is التكرير?" would
   // otherwise come with its answer attached.
+  // At most four per screen, so a dense explanation never turns into a page
+  // of underlines. Terms not yet shown in this unit take the places first;
+  // a term met two cards ago is the one to let go.
+  var GLOSS_MAX = 4;
   function linkGlossary(scope, questionOpen) {
-    var seen = {};
+    var seen = {}, cands = [];
+    var ep = S && S.unit ? S.unit.ep : 0;
     var sel = ".teach p span.ar, .why span.ar" + (questionOpen ? "" : ", p.q span.ar");
     scope.querySelectorAll(sel).forEach(function (sp) {
-      var e = glossFor(sp.textContent);
+      var e = glossFor(sp.textContent, ep);
       if (!e || seen[e.id]) return;
       seen[e.id] = true;
+      cands.push({ sp: sp, e: e, old: !!(S && S.glossed && S.glossed[e.id]) });
+    });
+    var chosen = cands.filter(function (c) { return !c.old; })
+      .concat(cands.filter(function (c) { return c.old; })).slice(0, GLOSS_MAX);
+    chosen.forEach(function (c) {
+      var sp = c.sp, e = c.e;
+      if (S) { S.glossed = S.glossed || {}; S.glossed[e.id] = true; }
       sp.classList.add("gl");
       sp.dataset.g = e.id;
       sp.tabIndex = 0;
       sp.setAttribute("role", "button");
       sp.setAttribute("aria-expanded", "false");
       sp.setAttribute("aria-label", sp.textContent + ": " + e.en + ". Tap for the meaning");
+    });
+  }
+
+  // Arabic inside a definition gets the Arabic face, like everywhere else.
+  function glossDef(e) {
+    return esc(e.def).replace(/[؀-ۿ]+(?:\s+[؀-ۿ]+)*/g, function (m) {
+      return '<span class="ar">' + m + '</span>';
     });
   }
 
@@ -299,10 +325,9 @@
     if (!e) return;
     if (popFor === sp) return closeGloss();
     closeGloss();
-    // Arabic inside a definition gets the Arabic face, like everywhere else.
-    var def = esc(e.def).replace(/[؀-ۿ]+(?:\s+[؀-ۿ]+)*/g, function (m) {
-      return '<span class="ar">' + m + '</span>';
-    });
+    var def = glossDef(e);
+    // Once someone has opened a definition, the start-screen tip has done its job.
+    try { localStorage.setItem("tajweed-gloss-used", "1"); } catch (err) { /* storage blocked */ }
     pop = document.createElement("div");
     pop.className = "gpop";
     pop.setAttribute("role", "dialog");
@@ -456,6 +481,8 @@
       '<p>' + u.teach.length + ' quick cards, then ' + u.questions.length + ' questions. About four minutes.</p>' +
       (u.url ? '<p><a class="watch" href="' + u.url + '" target="_blank" rel="noopener">▶ Watch episode ' +
         u.ep + ' on YouTube</a></p>' : '') +
+      (glossTipNeeded() ? '<p class="gtip">Tip: tap any word with a <span class="gtip-demo">dotted underline</span> ' +
+        'to see what it means, or <a href="#/glossary">browse the glossary</a>.</p>' : '') +
       '<button class="cta" id="go">Start</button>' +
       '<button class="ghost" id="skip">Skip to the questions</button>', false);
     setBar(0, 1);
@@ -705,7 +732,52 @@
     var m = /^#\/u\/(\d+)/.exec(h);
     if (m) renderUnit(parseInt(m[1], 10));
     else if (h === "#/privacy") { S = null; renderPrivacy(); }
+    else if (h === "#/glossary") { S = null; renderGlossary(); }
     else { S = null; renderHub(); }
+  }
+
+  /* ── glossary page ──────────────────────── */
+  function glossTipNeeded() {
+    try { return !localStorage.getItem("tajweed-gloss-used"); } catch (e) { return true; }
+  }
+
+  // Every term in one place, grouped by topic as glossary.json lists them, with a
+  // filter that matches English, transliteration or Arabic (vowels ignored).
+  function renderGlossary() {
+    VIEW = "glossary";
+    document.title = "Glossary · Tajweed Companion";
+    var list = window.GLOSSARY || [];
+    root.innerHTML =
+      '<div class="bar"><button class="back" id="btnBack">‹ All units</button></div>' +
+      '<div class="card prose">' +
+        '<h1>Glossary</h1>' +
+        '<p class="lead">The ' + list.length + ' terms the drills link to. In a unit, tap any word ' +
+          'with a dotted underline to see its entry.</p>' +
+        '<input class="gsearch" id="gsearch" type="search" placeholder="Search in English or Arabic" ' +
+          'aria-label="Search the glossary" autocomplete="off">' +
+        '<p class="fine gcount" id="gcount"></p>' +
+        '<dl class="glist" id="glist">' + list.map(function (e) {
+          return '<div class="gitem" data-k="' + esc((e.en + " " + e.tr + " " + e.forms.join(" ")).toLowerCase()) +
+            ' ' + esc(glossKey(e.ar)) + '">' +
+            '<dt><span class="gi-ar ar">' + esc(e.ar) + '</span>' +
+              '<span class="gi-en">' + esc(e.en) + '</span>' +
+              '<span class="gi-tr">' + esc(e.tr) + '</span></dt>' +
+            '<dd>' + glossDef(e) + '</dd></div>';
+        }).join("") + '</dl>' +
+      '</div>';
+    document.getElementById("btnBack").addEventListener("click", function () { location.hash = "#/"; });
+    var box = document.getElementById("gsearch"), items = root.querySelectorAll(".gitem");
+    var count = document.getElementById("gcount");
+    box.addEventListener("input", function () {
+      var q = box.value.trim().toLowerCase(), qa = glossKey(box.value), shown = 0;
+      items.forEach(function (it) {
+        var hit = !q || it.dataset.k.indexOf(q) > -1 || (qa && it.dataset.k.indexOf(qa) > -1);
+        it.classList.toggle("hide", !hit);
+        if (hit) shown++;
+      });
+      count.textContent = q ? (shown ? shown + " of " + items.length : "No term matches that.") : "";
+    });
+    window.scrollTo(0, 0);
   }
 
   /* ── about and privacy ──────────────────── */
