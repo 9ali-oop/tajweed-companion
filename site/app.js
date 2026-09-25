@@ -1,4 +1,4 @@
-/* Tajweed companion - hub + drill engine.
+/* Tajweed companion: hub and drill engine.
    Content lives in data.js as window.UNITS. Progress lives in localStorage. */
 (function () {
   "use strict";
@@ -223,8 +223,8 @@
 
     html += '<button class="install' + (installEvt ? '' : ' hide') + '" id="btnInstall">' +
       '<img src="icon-192.png" alt="" width="28" height="28">Install as an app</button>';
-    html += '<p class="hub-foot">A companion, not a substitute - the lessons are the Shaykh’s.<br>' +
-      'Answers are independently checked; any error here is ours, not his.<br>' +
+    html += '<p class="hub-foot">The lessons are the Shaykh’s. These drills are only here to help you review them.<br>' +
+      'If you find a mistake, it’s ours.<br>' +
       '<a href="#/privacy">About and privacy</a></p>';
 
     root.innerHTML = html;
@@ -284,7 +284,7 @@
       sp.tabIndex = 0;
       sp.setAttribute("role", "button");
       sp.setAttribute("aria-expanded", "false");
-      sp.setAttribute("aria-label", sp.textContent + " - " + e.en + ", tap for meaning");
+      sp.setAttribute("aria-label", sp.textContent + ": " + e.en + ". Tap for the meaning");
     });
   }
 
@@ -354,7 +354,7 @@
     b.setAttribute("aria-label", state === "playing" ? "Stop the recitation" :
       "Listen to the āya, recited by al-Ḥuṣarī");
     b.textContent = state === "playing" ? "■ Stop" : state === "loading" ? "Loading…" :
-      state === "error" ? "Couldn’t play - try again" : "▶ Listen";
+      state === "error" ? "Couldn’t play. Try again" : "▶ Listen";
   }
   function stopAudio() {
     if (player) { player.pause(); player.removeAttribute("src"); player.load(); }
@@ -452,7 +452,7 @@
       '<h1>' + esc(u.title_en) + '</h1>' +
       '<p class="ar" style="font-size:1.5rem;color:var(--ink-soft);margin:-.2rem 0 .2rem">' + esc(u.title_ar) + '</p>' +
       (CAT_BY_EP[u.ep] ? '<p class="start-en">' + esc(CAT_BY_EP[u.ep].topic_en) + '</p>' : '') +
-      '<p class="lead">' + esc(u.summary) + '</p>' +
+      '<p class="lead">' + u.summary + '</p>' +
       '<p>' + u.teach.length + ' quick cards, then ' + u.questions.length + ' questions. About four minutes.</p>' +
       (u.url ? '<p><a class="watch" href="' + u.url + '" target="_blank" rel="noopener">▶ Watch episode ' +
         u.ep + ' on YouTube</a></p>' : '') +
@@ -515,14 +515,17 @@
     return order;
   }
 
-  function correctText(q) {
-    if (q.type === "multi") return (q.answers || []).join(" ، ");
+  // The key as HTML. Option text is authored unit content and may carry
+  // <span class='ar'> markup, so it is inserted as-is, exactly as the option
+  // buttons do; escaping it printed the raw tags in the "Not quite" line.
+  function correctHTML(q) {
+    if (q.type === "multi") return '<span class="ar">' + esc((q.answers || []).join(" ، ")) + '</span>';
     return (q.options || [])[q.answerIndex];
   }
 
   function feedbackHTML(ok, q) {
     return '<div class="fb ' + (ok ? "good" : "bad") + '">' +
-      '<div class="verdict">' + (ok ? "Correct" : "Not quite - it is " + esc(correctText(q))) + '</div>' +
+      '<div class="verdict">' + (ok ? "Correct" : "Not quite. The answer is " + correctHTML(q)) + '</div>' +
       '<div class="why">' + q.why + '</div></div>';
   }
 
@@ -647,10 +650,10 @@
     record(u.ep, score, n, !S.recorded);
     S.recorded = true;
 
-    var html = '<div class="score">' + score + '<small>out of ' + n + ' - ' + verdict + '</small></div>';
+    var html = '<div class="score">' + score + '<small>out of ' + n + '. ' + verdict + '</small></div>';
     if (skipped) {
-      html += '<p class="skipnote">' + skipped + (skipped === 1 ? " question" : " questions") +
-        ' skipped - tap one below to answer it.</p>';
+      html += '<p class="skipnote">You skipped ' + skipped + (skipped === 1 ? " question" : " questions") +
+        '. Tap one below to answer it.</p>';
     }
     if (S.best > 1) {
       html += '<p style="text-align:center;margin:.6rem 0 0;color:var(--between);font-weight:600">Best streak 🔥 ' + S.best + '</p>';
@@ -661,15 +664,15 @@
       html += '<div class="review"><h3>Worth revisiting</h3><ul>' + revisit.map(function (k) {
         var q = u.questions[k], r = S.ans[k];
         return '<li><button class="jump" data-k="' + k + '"><span class="jn">' + (k + 1) + '</span>' +
-          esc(String(q.q).replace(/<[^>]+>/g, "")) + ' - ' +
-          (r ? '<strong>' + esc(correctText(q)) + '</strong>' : '<em>not answered</em>') +
+          esc(String(q.q).replace(/<[^>]+>/g, "")) + '<br>' +
+          (r ? '<strong>' + correctHTML(q) + '</strong>' : '<em>not answered</em>') +
           '</button></li>';
       }).join("") + '</ul></div>';
     }
     html += '<button class="cta" id="again">Drill again</button>' +
       '<button class="ghost" id="review">Review your answers</button>' +
       '<button class="ghost" id="hub">Back to all units</button>' +
-      '<p class="foot">Episode ' + u.ep + ' - <span class="ar">' + esc(u.title_ar) + '</span>' +
+      '<p class="foot">Episode ' + u.ep + ': <span class="ar">' + esc(u.title_ar) + '</span>' +
       (u.url ? ' · <a href="' + u.url + '" target="_blank" rel="noopener">watch the lesson</a>' : '') + '</p>';
     mount(html, false);
     setBar(1, 1);

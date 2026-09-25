@@ -232,7 +232,7 @@ async function pullAndMerge() {
     }
     setStatus("Synced");
   } catch (e) {
-    setStatus(navigator.onLine ? "Couldn’t sync - saved on this device" : "Offline - saved on this device");
+    setStatus(navigator.onLine ? "Couldn’t sync. Your progress is saved on this device." : "You’re offline. Your progress is saved on this device.");
   }
 }
 
@@ -248,7 +248,7 @@ async function signIn() {
       return fb.signInWithRedirect(fb.auth, provider);
     }
     state.busy = false;
-    setStatus(e && e.code === "auth/popup-closed-by-user" ? "" : "Sign-in didn’t finish - try again");
+    setStatus(e && e.code === "auth/popup-closed-by-user" ? "" : "Sign-in didn’t finish. Try again.");
   }
 }
 
