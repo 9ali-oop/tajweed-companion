@@ -164,9 +164,16 @@
         // sentence, its full stop drifted to the wrong end.
         '<p class="sub">Drills for <span class="ar">شرح كتاب التجويد المصور</span> by ' +
         '<span class="ar">د. أيمن رشدي سويد</span>. One short unit per episode.</p>' +
-        (window.PLAYLIST ? '<a class="playlist" href="' + window.PLAYLIST + '" target="_blank" rel="noopener">' +
-          '<span class="pl-icon" aria-hidden="true">▶</span><span><strong>Watch the course on YouTube</strong>' +
-          '<small>' + CATALOGUE.length + ' episodes, in order</small></span></a>' : '') +
+        // Two ways into the course material, side by side: the videos, and
+        // the terms the drills use.
+        '<div class="quick">' +
+          (window.PLAYLIST ? '<a class="qtile" href="' + window.PLAYLIST + '" target="_blank" rel="noopener">' +
+            '<span class="qi qi-yt" aria-hidden="true">▶</span><strong>Watch the course</strong>' +
+            '<small>' + CATALOGUE.length + ' episodes on YouTube</small></a>' : '') +
+          '<a class="qtile" href="#/glossary">' +
+            '<span class="qi qi-gl ar" aria-hidden="true">أ ب</span><strong>Glossary</strong>' +
+            '<small>' + (window.GLOSSARY || []).length + ' terms explained</small></a>' +
+        '</div>' +
         continueCard(p) +
         '<div class="overall">' +
           '<div class="row"><span class="big">' + gotQ + ' / ' + totalQ + '</span>' +
@@ -741,6 +748,26 @@
     try { return !localStorage.getItem("tajweed-gloss-used"); } catch (e) { return true; }
   }
 
+  // Transliteration is typed a dozen ways: sifa, ṣifa, sifah, sifat; ghunna,
+  // ghunnah, gunna; tajwīd, tajweed. Both sides are folded the same way:
+  // accents and ʿ ʾ dropped, ee/oo read as i/u, doubled letters and a final
+  // -ah collapsed, hyphens treated as spaces.
+  function foldLatin(s) {
+    return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toLowerCase().replace(/[ʿʾ'’‘`]/g, "").replace(/[-_]/g, " ")
+      .replace(/ee/g, "i").replace(/oo/g, "u").replace(/([a-z])\1+/g, "$1")
+      .replace(/ah\b/g, "a").replace(/\s+/g, " ").trim();
+  }
+  // A plain substring match, plus plurals and endings: "sifat" still finds
+  // "sifa", because a word of the entry is the start of what was typed.
+  function latinHit(key, q) {
+    if (!q) return true;
+    if (key.indexOf(q) > -1) return true;
+    return key.split(" ").some(function (w) {
+      return w.length >= 4 && q.indexOf(w) === 0 && q.length - w.length <= 2;
+    });
+  }
+
   // Every term in one place, grouped by topic as glossary.json lists them, with a
   // filter that matches English, transliteration or Arabic (vowels ignored).
   function renderGlossary() {
@@ -757,8 +784,9 @@
           'aria-label="Search the glossary" autocomplete="off">' +
         '<p class="fine gcount" id="gcount"></p>' +
         '<dl class="glist" id="glist">' + list.map(function (e) {
-          return '<div class="gitem" data-k="' + esc((e.en + " " + e.tr + " " + e.forms.join(" ")).toLowerCase()) +
-            ' ' + esc(glossKey(e.ar)) + '">' +
+          var latin = foldLatin(e.en + " " + e.tr + " " + (e.alt || []).join(" "));
+          var arabic = e.forms.concat([e.ar]).map(glossKey).join(" ");
+          return '<div class="gitem" data-k="' + esc(latin) + '" data-a="' + esc(arabic) + '">' +
             '<dt><span class="gi-ar ar">' + esc(e.ar) + '</span>' +
               '<span class="gi-en">' + esc(e.en) + '</span>' +
               '<span class="gi-tr">' + esc(e.tr) + '</span></dt>' +
@@ -769,9 +797,10 @@
     var box = document.getElementById("gsearch"), items = root.querySelectorAll(".gitem");
     var count = document.getElementById("gcount");
     box.addEventListener("input", function () {
-      var q = box.value.trim().toLowerCase(), qa = glossKey(box.value), shown = 0;
+      var raw = box.value.trim(), q = foldLatin(raw), qa = glossKey(raw), shown = 0;
+      var arabic = /[؀-ۿ]/.test(raw);
       items.forEach(function (it) {
-        var hit = !q || it.dataset.k.indexOf(q) > -1 || (qa && it.dataset.k.indexOf(qa) > -1);
+        var hit = !raw || (arabic ? qa && it.dataset.a.indexOf(qa) > -1 : latinHit(it.dataset.k, q));
         it.classList.toggle("hide", !hit);
         if (hit) shown++;
       });
