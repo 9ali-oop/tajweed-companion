@@ -168,10 +168,10 @@
         // the terms the drills use.
         '<div class="quick">' +
           (window.PLAYLIST ? '<a class="qtile" href="' + window.PLAYLIST + '" target="_blank" rel="noopener">' +
-            '<span class="qi qi-yt" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></span><strong>Watch the course</strong>' +
+            '<span class="qi qi-yt" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg></span><strong>Watch the course</strong>' +
             '<small>' + CATALOGUE.length + ' episodes on YouTube</small></a>' : '') +
           '<a class="qtile" href="#/glossary">' +
-            '<span class="qi qi-gl" aria-hidden="true"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></span><strong>Glossary</strong>' +
+            '<span class="qi qi-gl ar" aria-hidden="true">أ ب</span><strong>Glossary</strong>' +
             '<small>' + (window.GLOSSARY || []).length + ' terms explained</small></a>' +
         '</div>' +
         continueCard(p) +
