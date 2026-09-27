@@ -345,3 +345,10 @@ svg.flow{display:block;width:100%;height:78px;margin:.3rem 0 .2rem}
 .qi-yt{background:#E0452C;width:42px;height:29px;border-radius:8px}
 /* The original look, kept on purpose. */
 .qi-gl{background:var(--brand);font-size:1.05rem;line-height:1;padding-bottom:3px;box-sizing:border-box}
+
+/* ── resume a drill left part-way ───────── */
+.resume{background:var(--brand-soft);border-radius:16px;padding:.9rem 1rem;margin:.8rem 0 0}
+.resume p{margin:0 0 .7rem}
+.resume-row{display:flex;gap:.6rem}
+.resume-row .cta{flex:1;margin:0}
+.resume-row .nav-btn{flex:0 0 auto;padding:.8rem 1.1rem}

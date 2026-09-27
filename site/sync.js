@@ -208,7 +208,10 @@ async function deleteEverything() {
 
   // Clear this browser's copy too: left in place, the next sign-in here would
   // upload it straight back.
-  try { localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ }
+  try {
+    localStorage.removeItem(KEY);
+    localStorage.removeItem("tajweed-companion-attempts-v1");
+  } catch (e) { /* storage blocked */ }
   state.justDeleted = true;
   document.dispatchEvent(new CustomEvent("tj:progress-updated"));
 }
@@ -286,7 +289,22 @@ async function start() {
 
 document.addEventListener("tj:hub-rendered", draw);
 document.addEventListener("tj:privacy-rendered", drawPrivacy);
-document.addEventListener("tj:progress-saved", function () { if (state.user) pullAndMerge(); });
+// Scores are now saved after every answer, not once per drill. Wait for a
+// short pause before syncing so a run of answers makes one round trip, and
+// send anything still waiting when the page is hidden or closed.
+let pushTimer = null;
+function flushPush() {
+  if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; if (state.user) pullAndMerge(); }
+}
+document.addEventListener("tj:progress-saved", function () {
+  if (!state.user) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(function () { pushTimer = null; pullAndMerge(); }, 4000);
+});
+window.addEventListener("pagehide", flushPush);
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "hidden") flushPush();
+});
 // Coming back to the tab is when another device's progress matters most.
 let lastPull = 0;
 document.addEventListener("visibilitychange", function () {

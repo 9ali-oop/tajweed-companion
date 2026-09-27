@@ -93,6 +93,17 @@
   }
 
   function continueCard(p) {
+    // A drill left half-way comes first: that is where the learner actually is.
+    var open = latestAttempt();
+    if (open) {
+      var ou = open.u, done = open.a.ans.filter(Boolean).length, total = ou.questions.length;
+      var right = open.a.ans.filter(function (a) { return a && a.ok; }).length;
+      return '<div class="cont"><span class="cont-label">Pick up where you left off</span>' +
+        '<div class="cont-title">Unit ' + ou.ep + ' · ' + esc(ou.title_en) + '</div>' +
+        '<div class="cont-sub">' + done + ' of ' + total + ' answered, ' + right + ' correct</div>' +
+        '<div class="cont-actions"><button class="cont-go" data-ep="' + ou.ep + '" data-resume="1">' +
+          'Resume unit ' + ou.ep + '</button></div></div>';
+    }
     var n = nextUp(p);
     if (!n) {
       return '<div class="cont soon"><span class="cont-label">All done</span>' +
@@ -236,7 +247,9 @@
 
     root.innerHTML = html;
     root.querySelectorAll(".unit, .cont-go").forEach(function (b) {
-      b.addEventListener("click", function () { location.hash = "#/u/" + b.dataset.ep; });
+      b.addEventListener("click", function () {
+        location.hash = "#/u/" + b.dataset.ep + (b.dataset.resume ? "/resume" : "");
+      });
     });
     document.getElementById("btnInstall").addEventListener("click", function () {
       if (!installEvt) return;
@@ -434,12 +447,72 @@
     return S.ans.filter(Boolean).length;
   }
 
-  function renderUnit(ep) {
+  /* ── an attempt in progress survives leaving ── */
+  // Closing the tab or tapping away mid-drill used to lose every answer,
+  // because nothing was saved until the results screen. Each answer now
+  // updates the unit's score straight away (record), and the attempt itself
+  // is kept on this device so the learner can resume where they stopped.
+  // A saved attempt is dropped once its results are shown, and ignored if
+  // the unit's questions have changed since (sig).
+  var ATTEMPTS = "tajweed-companion-attempts-v1";
+  function unitSig(u) {
+    return u.questions.length + ":" + u.questions.reduce(function (n, q) { return n + String(q.q).length; }, 0);
+  }
+  function loadAttempts() {
+    try { return JSON.parse(localStorage.getItem(ATTEMPTS) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveAttempts(all) {
+    try { localStorage.setItem(ATTEMPTS, JSON.stringify(all)); } catch (e) { /* storage blocked */ }
+  }
+  function savedAttempt(u) {
+    var a = loadAttempts()[u.ep];
+    if (!a || a.sig !== unitSig(u) || !a.ans || !a.ans.some(Boolean)) return null;
+    return a;
+  }
+  function keepAttempt() {
+    if (!S || !S.ans.some(Boolean)) return;
+    var all = loadAttempts();
+    all[S.unit.ep] = { sig: unitSig(S.unit), ans: S.ans, orders: S.orders, qi: S.qi,
+                       streak: S.streak, best: S.best, recorded: S.recorded, ts: Date.now() };
+    saveAttempts(all);
+  }
+  function dropAttempt(ep) {
+    var all = loadAttempts();
+    if (all[ep]) { delete all[ep]; saveAttempts(all); }
+  }
+  function resumeAttempt(u, a) {
+    S = newAttempt(u);
+    S.ans = a.ans; S.orders = a.orders || []; S.streak = a.streak || 0;
+    S.best = a.best || 0; S.recorded = !!a.recorded;
+    var next = -1;
+    for (var i = 0; i < u.questions.length; i++) { if (!S.ans[i]) { next = i; break; } }
+    if (next < 0) return renderDone();
+    S.qi = next;
+    renderQ();
+  }
+  // The most recent unfinished attempt, for the hub's Continue card.
+  function latestAttempt() {
+    var all = loadAttempts(), best = null;
+    UNITS.forEach(function (u) {
+      var a = all[u.ep];
+      if (a && a.sig === unitSig(u) && a.ans && a.ans.some(Boolean) && (!best || a.ts > best.a.ts)) {
+        best = { u: u, a: a };
+      }
+    });
+    return best;
+  }
+
+  function renderUnit(ep, resume) {
     var unit = null;
     UNITS.forEach(function (u) { if (u.ep === ep) unit = u; });
     if (!unit) { location.hash = "#/"; return; }
     VIEW = "unit";
     document.title = "Unit " + unit.ep + ": " + unit.title_en + " · Tajweed Companion";
+    var saved = savedAttempt(unit);
+    if (resume && saved) {
+      history.replaceState(null, "", location.pathname + location.search + "#/u/" + ep);
+      return resumeAttempt(unit, saved);
+    }
     S = newAttempt(unit);
     renderStart();
   }
@@ -480,6 +553,17 @@
   function renderStart() {
     S.view = "";
     var u = S.unit;
+    // An attempt left part-way through: offer to carry on, or start fresh.
+    var saved = !S.ans.some(Boolean) ? savedAttempt(u) : null;
+    var resumeBox = "";
+    if (saved) {
+      var done = saved.ans.filter(Boolean).length;
+      var right = saved.ans.filter(function (a) { return a && a.ok; }).length;
+      resumeBox = '<div class="resume"><p><strong>You were part-way through this unit.</strong> ' +
+        done + ' of ' + u.questions.length + ' answered, ' + right + ' correct.</p>' +
+        '<div class="resume-row"><button class="cta" id="resume">Resume</button>' +
+        '<button class="nav-btn" id="fresh">Start over</button></div></div>';
+    }
     mount(
       '<h1>' + esc(u.title_en) + '</h1>' +
       '<p class="ar" style="font-size:1.5rem;color:var(--ink-soft);margin:-.2rem 0 .2rem">' + esc(u.title_ar) + '</p>' +
@@ -490,9 +574,17 @@
         u.ep + ' on YouTube</a></p>' : '') +
       (glossTipNeeded() ? '<p class="gtip">Tip: tap any word with a <span class="gtip-demo">dotted underline</span> ' +
         'to see what it means, or <a href="#/glossary">browse the glossary</a>.</p>' : '') +
-      '<button class="cta" id="go">Start</button>' +
-      '<button class="ghost" id="skip">Skip to the questions</button>', false);
+      resumeBox +
+      (saved ? '' : '<button class="cta" id="go">Start</button>' +
+        '<button class="ghost" id="skip">Skip to the questions</button>'), false);
     setBar(0, 1);
+    if (saved) {
+      document.getElementById("resume").addEventListener("click", function () { resumeAttempt(u, saved); });
+      document.getElementById("fresh").addEventListener("click", function () {
+        dropAttempt(u.ep); S = newAttempt(u); renderStart();
+      });
+      return;
+    }
     document.getElementById("go").addEventListener("click", function () { S.ti = 0; renderTeach(); });
     document.getElementById("skip").addEventListener("click", function () { renderQ(); });
   }
@@ -669,6 +761,12 @@
     S.ans[i] = { pick: pick, ok: ok };
     if (ok) { S.streak++; if (S.streak > S.best) S.best = S.streak; }
     else S.streak = 0;
+    // Score and attempt are saved on every answer, so leaving mid-drill
+    // loses nothing. The first answer of an attempt counts it as a run.
+    record(S.unit.ep, scoreOf(), S.unit.questions.length, !S.recorded);
+    S.recorded = true;
+    S.qi = i;
+    keepAttempt();
     renderQ(true);
     var nx = document.getElementById("nextq");
     if (nx) nx.focus();
@@ -683,6 +781,8 @@
     // updates the best score without counting another run.
     record(u.ep, score, n, !S.recorded);
     S.recorded = true;
+    // Results seen: the attempt is complete, so there is nothing to resume.
+    dropAttempt(u.ep);
 
     var html = '<div class="score">' + score + '<small>out of ' + n + '. ' + verdict + '</small></div>';
     if (skipped) {
@@ -736,8 +836,8 @@
     closeGloss();
     stopAudio();
     var h = location.hash || "";
-    var m = /^#\/u\/(\d+)/.exec(h);
-    if (m) renderUnit(parseInt(m[1], 10));
+    var m = /^#\/u\/(\d+)(\/resume)?/.exec(h);
+    if (m) renderUnit(parseInt(m[1], 10), !!m[2]);
     else if (h === "#/privacy") { S = null; renderPrivacy(); }
     else if (h === "#/glossary") { S = null; renderGlossary(); }
     else { S = null; renderHub(); }
@@ -880,7 +980,7 @@
         box.classList.add("hide"); reset.classList.remove("hide");
       });
       document.getElementById("resetYes").addEventListener("click", function () {
-        try { localStorage.removeItem(KEY); } catch (e) {}
+        try { localStorage.removeItem(KEY); localStorage.removeItem(ATTEMPTS); } catch (e) {}
         document.getElementById("data-controls").innerHTML =
           '<p class="done-msg">Progress on this device has been reset.</p>';
       });
