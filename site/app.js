@@ -192,8 +192,10 @@
           '<div class="track"><div class="fill" style="width:' +
             (totalQ ? (gotQ / totalQ * 100) : 0) + '%"></div></div>' +
           '<p style="margin:.7rem 0 0;font-size:.84rem;color:var(--ink-faint)">' +
-            UNITS.length + ' of ' + CATALOGUE.length + ' units ready. More are added as the ' +
-            'series goes on.</p>' +
+            (UNITS.length >= CATALOGUE.length
+              ? 'All ' + CATALOGUE.length + ' units are ready, one for every episode.'
+              : UNITS.length + ' of ' + CATALOGUE.length + ' units ready. More are added as the series goes on.') +
+            '</p>' +
           '<p class="sync-note" id="syncNote"></p>' +
         '</div>' +
       '</div>';
