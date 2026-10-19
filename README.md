@@ -1,5 +1,7 @@
 # Tajweed Companion
 
+![Tajweed Companion: short drills for each episode of Dr. Ayman Swaid's course](site/og.png)
+
 Short interactive drills for Dr. Ayman Rushdi Swaid's 45-episode video
 commentary on **التجويد المصور**. Each episode has one unit: a few teaching
 cards, then about twelve questions. A unit takes around four minutes.

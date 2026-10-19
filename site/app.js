@@ -156,7 +156,7 @@
   /* ── hub ────────────────────────────────── */
   function renderHub() {
     VIEW = "hub";
-    document.title = "Tajweed Companion";
+    document.title = "Tajweed Companion - drills for Dr. Ayman Swaid's التجويد المصور";
     var p = loadProgress();
     var byEp = {};
     UNITS.forEach(function (u) { byEp[u.ep] = u; });
