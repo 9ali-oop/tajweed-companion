@@ -965,57 +965,92 @@
            total: cs.length, done: 0, missed: {}, flipped: false };
     renderStudy();
   }
-  function letterBack(c) {
-    var same = c.id === "ghunna" ? "Carried by:" : "Same point:";
-    return '<div class="lc-back">' +
+  // Flashcard style: one card, tap it or press Space to turn it. The answer
+  // is the essentials only (the makhraj in Arabic and English, and the letters
+  // sharing it); everything else sits under "More", which stays open once
+  // opened. Keys: Space or Enter turns the card, then counts as "Got it";
+  // 1 or ← is "Again", 2 or → is "Got it".
+  var MORE = "tajweed-letters-more";
+  function moreOpen() { try { return localStorage.getItem(MORE) === "1"; } catch (e) { return false; } }
+  function letterMore(c) {
+    return '<details class="fc-more" id="fcmore"' + (moreOpen() ? " open" : "") + '>' +
+      '<summary>More about <span class="ar">' + esc(c.letter) + '</span></summary>' +
       '<div class="lc-meta"><span class="lc-reg">' + regionLabel(c.region) + '</span>' +
         '<span class="lc-no">Makhraj ' + c.makhraj_no + ' of 17</span></div>' +
-      '<div class="lc-mar ar">' + esc(c.makhraj_ar) + '</div>' +
-      '<p class="lc-men">' + esc(c.makhraj_en) + '</p>' +
-      (c.shares.length
-        ? '<p class="lc-row"><strong>' + same + '</strong> <span class="ar lc-shares">' + c.shares.map(esc).join(" ، ") + '</span></p>'
-        : '<p class="lc-row"><strong>Its own point:</strong> no other letter comes from here.</p>') +
       '<p class="lc-row">' + arWrap(esc(c.diff)) + '</p>' +
       '<p class="lc-feel"><strong>Feel it:</strong> ' + arWrap(esc(c.feel)) + '</p>' +
       '<div class="lc-jz"><span class="lc-jz-label">Ibn al-Jazarī</span><span class="ar">' + esc(c.jazariyyah) + '</span>' +
         (c.note ? '<p class="lc-note">' + arWrap(esc(c.note)) + '</p>' : '') + '</div>' +
       '<p><a class="watch" href="' + c.video.url + '" target="_blank" rel="noopener">Hear the Shaykh explain it ' +
         '(episode ' + c.video.ep + ', ' + mmss(c.video.t) + ') ↗</a></p>' +
-    '</div>';
+    '</details>';
   }
   function renderStudy() {
     VIEW = "lsession";
     if (!LS.queue.length) return renderLettersDone();
     var c = cardById(LS.queue[0]);
     document.title = "Letters · " + c.letter + " · Tajweed Companion";
+    var same = c.id === "ghunna" ? "Carried by" : "Same point";
     var html =
-      '<div class="lc-front">' +
-        '<div class="lc-letter ar">' + esc(c.letter) + '</div>' +
-        '<div class="lc-say">Say <span class="ar">' + esc(c.say) + '</span></div>' +
-        '<div class="lc-ex"><span class="ar">' + esc(c.example.text) + '</span> <span class="ref">' + esc(c.example.ref) + '</span></div>' +
+      '<div class="fc' + (LS.flipped ? " fc-flipped" : "") + '" id="fc"' +
+        (LS.flipped ? "" : ' role="button" tabindex="0" aria-label="Show the makhraj"') + '>' +
+        '<div class="fc-letter ar">' + esc(c.letter) + '</div>' +
+        '<div class="fc-say">Say <span class="ar">' + esc(c.say) + '</span>' +
+          '<span class="fc-ex"><span class="ar">' + esc(c.example.text) + '</span> ' + esc(c.example.ref) + '</span></div>' +
+        (LS.flipped
+          ? '<div class="fc-answer">' +
+              '<div class="fc-mar ar">' + esc(c.makhraj_ar) + '</div>' +
+              '<p class="fc-men">' + esc(c.makhraj_en) + '</p>' +
+              '<p class="fc-same">' + (c.shares.length
+                ? same + ': <span class="ar">' + c.shares.map(esc).join(" ، ") + '</span>'
+                : 'No other letter comes from here.') + '</p>' +
+            '</div>'
+          : '<div class="fc-hint">Tap to turn<span class="kbd"> or press Space</span></div>') +
       '</div>' +
       (LS.flipped
-        ? letterBack(c) + '<div class="qnav"><button class="nav-btn" id="lagain">Again</button>' +
-            '<button class="nav-btn primary" id="lgot">Got it</button></div>'
-        : '<p class="lc-prompt">Where does it come from? Say it, feel it, then check.</p>' +
-          '<button class="cta" id="lflip">Show the makhraj</button>');
+        ? letterMore(c) +
+          '<div class="qnav"><button class="nav-btn" id="lagain">Again<span class="kbd"> 1</span></button>' +
+            '<button class="nav-btn primary" id="lgot">Got it<span class="kbd"> Space</span></button></div>'
+        : '');
     lmount(html, LS.done, LS.total);
     if (!LS.flipped) {
-      document.getElementById("lflip").addEventListener("click", function () { LS.flipped = true; renderStudy(); });
+      var fc = document.getElementById("fc");
+      fc.addEventListener("click", flipCard);
       return;
     }
-    document.getElementById("lgot").addEventListener("click", function () {
-      gradeLetter(c.id, true);
-      LS.queue.shift(); LS.done++; LS.flipped = false; renderStudy();
+    document.getElementById("fcmore").addEventListener("toggle", function (e) {
+      try { localStorage.setItem(MORE, e.target.open ? "1" : "0"); } catch (err) { /* storage blocked */ }
     });
-    document.getElementById("lagain").addEventListener("click", function () {
-      gradeLetter(c.id, false);
-      LS.missed[c.id] = true;
-      LS.queue.shift();
-      LS.queue.splice(Math.min(3, LS.queue.length), 0, c.id);
-      LS.flipped = false; renderStudy();
-    });
+    document.getElementById("lgot").addEventListener("click", function () { gradeCard(true); });
+    document.getElementById("lagain").addEventListener("click", function () { gradeCard(false); });
   }
+  function flipCard() {
+    if (!LS || LS.mode !== "study" || LS.flipped) return;
+    LS.flipped = true; renderStudy();
+  }
+  function gradeCard(ok) {
+    if (!LS || LS.mode !== "study" || !LS.flipped) return;
+    var id = LS.queue[0];
+    gradeLetter(id, ok);
+    LS.queue.shift();
+    if (ok) LS.done++;
+    else { LS.missed[id] = true; LS.queue.splice(Math.min(3, LS.queue.length), 0, id); }
+    LS.flipped = false; renderStudy();
+  }
+  document.addEventListener("keydown", function (e) {
+    if (VIEW !== "lsession" || !LS || e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target && e.target.tagName;
+    if (t === "INPUT" || t === "TEXTAREA" || t === "SUMMARY" || (t === "A" && e.key === "Enter")) return;
+    var k = e.key;
+    if (LS.mode === "study") {
+      if (k === " " || k === "Enter") { e.preventDefault(); if (LS.flipped) gradeCard(true); else flipCard(); }
+      else if (LS.flipped && (k === "1" || k === "ArrowLeft")) { e.preventDefault(); gradeCard(false); }
+      else if (LS.flipped && (k === "2" || k === "ArrowRight")) { e.preventDefault(); gradeCard(true); }
+    } else if (LS.mode === "test" && (k === "Enter" || k === " ")) {
+      var b = document.getElementById("lcheck") || document.getElementById("lnext");
+      if (b && !b.disabled && !(t === "BUTTON" && e.target.classList.contains("tile"))) { e.preventDefault(); b.click(); }
+    }
+  });
 
   // Test: one question per makhraj. The prompt is the makhraj's neutral name;
   // tap every letter that comes from it. Distractors come from the same

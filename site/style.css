@@ -390,3 +390,29 @@ a.ghost{color:var(--ink)}
 .lt-q{background:var(--sunk);border-radius:16px;padding:.7rem .9rem;margin:0 0 .9rem}
 .lt-q .lc-men{margin:.2rem 0 0;font-weight:500;color:var(--ink-soft)}
 .lc-note{font-size:.86rem;color:var(--ink-soft);margin:.35rem 0 0}
+
+/* ── flashcard ─────────────────────────── */
+.fc{background:var(--card);border:1.5px solid var(--line);border-radius:22px;box-shadow:var(--shadow);
+  padding:1.4rem 1.1rem 1.2rem;text-align:center;margin:0 0 .9rem;min-height:15rem;display:flex;flex-direction:column;
+  justify-content:center;gap:.4rem;cursor:pointer;user-select:none;transition:transform .12s, box-shadow .12s}
+.fc:not(.fc-flipped):hover{transform:translateY(-2px)}
+.fc:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
+.fc-flipped{cursor:default;min-height:0}
+.fc-letter{font-size:5.2rem;line-height:1.2;color:var(--ink)}
+.fc-flipped .fc-letter{font-size:3.4rem}
+.fc-say{color:var(--ink-soft);font-weight:600;display:flex;flex-wrap:wrap;justify-content:center;gap:.25rem .8rem;align-items:baseline}
+.fc-say > .ar{font-size:1.45rem;color:var(--brand)}
+.fc-ex{font-weight:400;color:var(--ink-faint);font-size:.85rem}
+.fc-ex .ar{font-size:1.25rem;color:var(--ink-soft)}
+.fc-hint{margin-top:.8rem;font-size:.85rem;color:var(--ink-faint)}
+.fc-answer{border-top:1.5px dashed var(--line);margin-top:.8rem;padding-top:.9rem}
+.fc-mar{font-size:1.5rem;line-height:1.75;color:var(--brand)}
+.fc-men{font-weight:600;margin:.4rem 0 .3rem;line-height:1.45}
+.fc-same{margin:.2rem 0 0;color:var(--ink-soft)}
+.fc-same .ar{font-size:1.3rem;color:var(--ink)}
+.fc-more{border:1.5px solid var(--line);border-radius:14px;padding:.2rem .9rem;margin:0 0 .9rem}
+.fc-more[open]{padding-bottom:.6rem}
+.fc-more summary{cursor:pointer;font-weight:600;padding:.55rem 0;color:var(--ink-soft)}
+.fc-more summary .ar{font-size:1.15rem;color:var(--ink)}
+.kbd{font-size:.72em;font-weight:600;opacity:.6;margin-left:.35rem}
+@media (hover: none){ .kbd{display:none} }
