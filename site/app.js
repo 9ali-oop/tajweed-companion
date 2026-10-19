@@ -57,6 +57,7 @@
   // account): redraw whatever page shows them.
   document.addEventListener("tj:progress-updated", function () {
     if (VIEW === "hub") renderHub(); else if (VIEW === "privacy") renderPrivacy();
+    else if (VIEW === "letters") renderLetters();
   });
   // Signing in or out changes what the privacy page offers.
   document.addEventListener("tj:auth-changed", function () {
@@ -184,6 +185,9 @@
           '<a class="qtile" href="#/glossary">' +
             '<span class="qi qi-gl ar" aria-hidden="true">أ ب</span><strong>Glossary</strong>' +
             '<small>' + (window.GLOSSARY || []).length + ' terms explained</small></a>' +
+          (LT.cards.length ? '<a class="qtile qtile-wide" href="#/letters">' +
+            '<span class="qi qi-lt ar" aria-hidden="true">ض</span><span class="qt-text"><strong>Letters</strong>' +
+            '<small>Learn where each letter comes from: ' + LT.cards.length + ' flashcards</small></span></a>' : '') +
         '</div>' +
         continueCard(p) +
         '<div class="overall">' +
@@ -842,7 +846,261 @@
     if (m) renderUnit(parseInt(m[1], 10), !!m[2]);
     else if (h === "#/privacy") { S = null; renderPrivacy(); }
     else if (h === "#/glossary") { S = null; renderGlossary(); }
+    else if (h === "#/letters") renderLetters();
+    else if (/^#\/letters\/(study|test)\/(\w+)$/.test(h)) {
+      var lm = /^#\/letters\/(study|test)\/(\w+)$/.exec(h);
+      S = null;
+      if (lm[2] !== "all" && !LT.regions[lm[2]]) { location.hash = "#/letters"; return; }
+      if (lm[1] === "study") startStudy(lm[2]); else startTest(lm[2]);
+    }
     else { S = null; renderHub(); }
+  }
+
+  /* ── letters: the makhraj deck ─────────── */
+  // 32 cards (28 letters, the three madd letters, the ghunna) in the
+  // Shaykh's wording from episodes 3 to 6. Study is flip and self-grade with
+  // a small box per card: "Got it" moves it up, "Again" sends it back to the
+  // start and shows it again a few cards later. A card is known at box 2.
+  // The box lives on this device; the best box reached is saved with the
+  // unit scores under "L_<id>", so it syncs like everything else.
+  var LT = window.LETTERS || { regions: {}, makharij: {}, cards: [] };
+  var LBOX = "tajweed-companion-letters-v1";
+  var REG_ORDER = ["jawf", "halq", "lisan", "shafatan", "khayshum"];
+  var REG_TONE = { jawf: "flow", halq: "stop", lisan: "brand", shafatan: "between", khayshum: "flow" };
+  var LS = null;
+
+  function loadBoxes() {
+    try { return JSON.parse(localStorage.getItem(LBOX) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveBoxes(b) {
+    try { localStorage.setItem(LBOX, JSON.stringify(b)); } catch (e) { /* storage blocked */ }
+  }
+  function letterKnown(id, p, boxes) {
+    if (id in boxes) return boxes[id] >= 2;
+    var r = p["L_" + id];
+    return !!(r && r.best >= 2);
+  }
+  function gradeLetter(id, ok) {
+    var boxes = loadBoxes(), b = ok ? Math.min((boxes[id] || 0) + 1, 3) : 0;
+    boxes[id] = b;
+    saveBoxes(boxes);
+    var p = loadProgress(), prev = p["L_" + id] || { best: 0, total: 3, runs: 0 };
+    p["L_" + id] = { best: Math.max(prev.best || 0, b), total: 3, runs: (prev.runs || 0) + 1 };
+    saveProgress(p);
+    document.dispatchEvent(new CustomEvent("tj:progress-saved"));
+  }
+  function cardsIn(region) {
+    return LT.cards.filter(function (c) { return region === "all" || c.region === region; });
+  }
+  function cardById(id) {
+    for (var i = 0; i < LT.cards.length; i++) if (LT.cards[i].id === id) return LT.cards[i];
+    return null;
+  }
+  function arWrap(html) {
+    return html.replace(/[؀-ۿ]+(?:\s+[؀-ۿ]+)*/g, function (m) { return '<span class="ar">' + m + '</span>'; });
+  }
+  function mmss(t) { return Math.floor(t / 60) + ":" + ("0" + (t % 60)).slice(-2); }
+  function shuffled(a) {
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function regionLabel(r) {
+    var reg = LT.regions[r] || ["", ""];
+    return esc(reg[1]) + ' · <span class="ar">' + esc(reg[0]) + '</span>';
+  }
+
+  function lshell(inner, done, total) {
+    return '<div class="bar"><button class="back" id="btnBack">‹ Letters</button>' +
+      '<div class="track" style="flex:1"><div class="fill" style="width:' + (total ? done / total * 100 : 0) + '%"></div></div>' +
+      '</div><div class="card">' + inner + '</div>';
+  }
+  function lmount(inner, done, total) {
+    closeGloss(); stopAudio();
+    root.innerHTML = lshell(inner, done, total);
+    document.getElementById("btnBack").addEventListener("click", function () { location.hash = "#/letters"; });
+    window.scrollTo(0, 0);
+  }
+
+  // The deck page: five regions in the order of episodes 3 to 6.
+  function renderLetters() {
+    VIEW = "letters"; S = null; LS = null;
+    document.title = "Letters · Tajweed Companion";
+    var p = loadProgress(), boxes = loadBoxes();
+    var known = LT.cards.filter(function (c) { return letterKnown(c.id, p, boxes); }).length;
+    var rows = REG_ORDER.map(function (r) {
+      var cs = cardsIn(r), k = cs.filter(function (c) { return letterKnown(c.id, p, boxes); }).length;
+      var glyphs = cs.map(function (c) { return c.letter; }).join(" ");
+      return '<div class="lreg" style="--fam:var(--' + REG_TONE[r] + ')">' +
+        '<div class="lreg-head"><span class="lreg-name">' + regionLabel(r) + '</span>' +
+          '<span class="lreg-count">' + k + ' / ' + cs.length + ' known</span></div>' +
+        '<div class="lreg-glyphs ar">' + esc(glyphs) + '</div>' +
+        '<div class="lreg-actions"><a class="nav-btn primary" href="#/letters/study/' + r + '">Study</a>' +
+          '<a class="nav-btn" href="#/letters/test/' + r + '">Test</a></div></div>';
+    }).join("");
+    root.innerHTML =
+      '<div class="bar"><button class="back" id="btnBack">‹ All units</button></div>' +
+      '<div class="card prose">' +
+        '<h1>Letters and their makhārij</h1>' +
+        '<p class="lead">Where each letter comes from, in the Shaykh’s own words. Go region by region, ' +
+          'in the order of episodes 3 to 6, and say each practice syllable aloud: with a sukūn, the sound ' +
+          'stops exactly at the letter’s makhraj.</p>' +
+        '<div class="overall lt-overall"><div class="row"><span class="big">' + known + ' / ' + LT.cards.length + '</span>' +
+          '<span class="cap">cards known</span></div>' +
+          '<div class="track"><div class="fill" style="width:' + (known / Math.max(1, LT.cards.length) * 100) + '%"></div></div></div>' +
+        rows +
+        '<div class="lreg-all"><a class="nav-btn primary" href="#/letters/study/all">Study all 32</a>' +
+          '<a class="nav-btn" href="#/letters/test/all">Test all 17 makhārij</a></div>' +
+      '</div>';
+    document.getElementById("btnBack").addEventListener("click", function () { location.hash = "#/"; });
+    window.scrollTo(0, 0);
+  }
+
+  // Study: unseen and weak cards first, otherwise in the course's order.
+  function startStudy(region, onlyIds) {
+    var boxes = loadBoxes();
+    var cs = cardsIn(region).filter(function (c) { return !onlyIds || onlyIds.indexOf(c.id) > -1; });
+    cs.sort(function (a, b) { return (boxes[a.id] || 0) - (boxes[b.id] || 0) || a.makhraj_no - b.makhraj_no; });
+    LS = { mode: "study", region: region, queue: cs.map(function (c) { return c.id; }),
+           total: cs.length, done: 0, missed: {}, flipped: false };
+    renderStudy();
+  }
+  function letterBack(c) {
+    var same = c.id === "ghunna" ? "Carried by:" : "Same point:";
+    return '<div class="lc-back">' +
+      '<div class="lc-meta"><span class="lc-reg">' + regionLabel(c.region) + '</span>' +
+        '<span class="lc-no">Makhraj ' + c.makhraj_no + ' of 17</span></div>' +
+      '<div class="lc-mar ar">' + esc(c.makhraj_ar) + '</div>' +
+      '<p class="lc-men">' + esc(c.makhraj_en) + '</p>' +
+      (c.shares.length
+        ? '<p class="lc-row"><strong>' + same + '</strong> <span class="ar lc-shares">' + c.shares.map(esc).join(" ، ") + '</span></p>'
+        : '<p class="lc-row"><strong>Its own point:</strong> no other letter comes from here.</p>') +
+      '<p class="lc-row">' + arWrap(esc(c.diff)) + '</p>' +
+      '<p class="lc-feel"><strong>Feel it:</strong> ' + arWrap(esc(c.feel)) + '</p>' +
+      '<div class="lc-jz"><span class="lc-jz-label">Ibn al-Jazarī</span><span class="ar">' + esc(c.jazariyyah) + '</span>' +
+        (c.note ? '<p class="lc-note">' + arWrap(esc(c.note)) + '</p>' : '') + '</div>' +
+      '<p><a class="watch" href="' + c.video.url + '" target="_blank" rel="noopener">Hear the Shaykh explain it ' +
+        '(episode ' + c.video.ep + ', ' + mmss(c.video.t) + ') ↗</a></p>' +
+    '</div>';
+  }
+  function renderStudy() {
+    VIEW = "lsession";
+    if (!LS.queue.length) return renderLettersDone();
+    var c = cardById(LS.queue[0]);
+    document.title = "Letters · " + c.letter + " · Tajweed Companion";
+    var html =
+      '<div class="lc-front">' +
+        '<div class="lc-letter ar">' + esc(c.letter) + '</div>' +
+        '<div class="lc-say">Say <span class="ar">' + esc(c.say) + '</span></div>' +
+        '<div class="lc-ex"><span class="ar">' + esc(c.example.text) + '</span> <span class="ref">' + esc(c.example.ref) + '</span></div>' +
+      '</div>' +
+      (LS.flipped
+        ? letterBack(c) + '<div class="qnav"><button class="nav-btn" id="lagain">Again</button>' +
+            '<button class="nav-btn primary" id="lgot">Got it</button></div>'
+        : '<p class="lc-prompt">Where does it come from? Say it, feel it, then check.</p>' +
+          '<button class="cta" id="lflip">Show the makhraj</button>');
+    lmount(html, LS.done, LS.total);
+    if (!LS.flipped) {
+      document.getElementById("lflip").addEventListener("click", function () { LS.flipped = true; renderStudy(); });
+      return;
+    }
+    document.getElementById("lgot").addEventListener("click", function () {
+      gradeLetter(c.id, true);
+      LS.queue.shift(); LS.done++; LS.flipped = false; renderStudy();
+    });
+    document.getElementById("lagain").addEventListener("click", function () {
+      gradeLetter(c.id, false);
+      LS.missed[c.id] = true;
+      LS.queue.shift();
+      LS.queue.splice(Math.min(3, LS.queue.length), 0, c.id);
+      LS.flipped = false; renderStudy();
+    });
+  }
+
+  // Test: one question per makhraj. The prompt is the makhraj's neutral name;
+  // tap every letter that comes from it. Distractors come from the same
+  // region first, so the choice is between real neighbours.
+  function startTest(region) {
+    var cs = cardsIn(region), groups = {};
+    cs.forEach(function (c) { (groups[c.makhraj_no] = groups[c.makhraj_no] || []).push(c); });
+    var others = LT.cards.filter(function (c) { return c.id !== "ghunna"; });
+    var qs = Object.keys(groups).map(Number).map(function (no) {
+      var g = groups[no];
+      var answers = g[0].id === "ghunna" ? g[0].shares.slice()
+        : g.map(function (c) { return c.letter; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
+      var near = shuffled(others.filter(function (c) {
+        return c.makhraj_no !== no && answers.indexOf(c.letter) < 0 && (c.region === g[0].region || Math.abs(c.makhraj_no - no) <= 3);
+      }).map(function (c) { return c.letter; }).filter(function (x, i, a) { return a.indexOf(x) === i; }));
+      return { no: no, name: LT.makharij[no], answers: answers, ids: g.map(function (c) { return c.id; }),
+               pool: shuffled(answers.concat(near.slice(0, Math.max(3, 6 - answers.length)))) };
+    });
+    LS = { mode: "test", region: region, qs: shuffled(qs), i: 0, pick: [], checked: false, right: 0, missed: [] };
+    renderTest();
+  }
+  function renderTest() {
+    VIEW = "lsession";
+    if (LS.i >= LS.qs.length) return renderLettersDone();
+    var q = LS.qs[LS.i], ok = null;
+    if (LS.checked) {
+      ok = LS.pick.length === q.answers.length && q.answers.every(function (a) { return LS.pick.indexOf(a) > -1; });
+    }
+    document.title = "Letters test · Tajweed Companion";
+    var html =
+      '<div class="qnum">Makhraj ' + (LS.i + 1) + ' of ' + LS.qs.length + '</div>' +
+      '<p class="q">Which letters come from here?</p>' +
+      '<div class="lt-q"><div class="lc-mar ar">' + esc(q.name[0]) + '</div><p class="lc-men">' + esc(q.name[1]) + '</p></div>' +
+      '<div class="tiles">' + q.pool.map(function (ch) {
+        var on = LS.pick.indexOf(ch) > -1, cls = "";
+        if (LS.checked) {
+          var key = q.answers.indexOf(ch) > -1;
+          cls = on && key ? " right" : on ? " wrong" : key ? " missed" : "";
+        }
+        return '<button class="tile ar' + cls + '" data-ch="' + esc(ch) + '" aria-pressed="' + on + '"' +
+          (LS.checked ? " disabled" : "") + '>' + esc(ch) + '</button>';
+      }).join("") + '</div>' +
+      (LS.checked
+        ? '<div class="fb ' + (ok ? "good" : "bad") + '"><div class="verdict">' +
+            (ok ? "Correct" : 'Not quite. The answer is <span class="ar">' + esc(q.answers.join(" ، ")) + '</span>') +
+            '</div></div><button class="cta" id="lnext">' + (LS.i === LS.qs.length - 1 ? "See results" : "Next") + '</button>'
+        : '<button class="cta" id="lcheck"' + (LS.pick.length ? "" : " disabled") + '>Check</button>');
+    lmount(html, LS.i + (LS.checked ? 1 : 0), LS.qs.length);
+    if (LS.checked) {
+      document.getElementById("lnext").addEventListener("click", function () {
+        LS.i++; LS.pick = []; LS.checked = false; renderTest();
+      });
+      return;
+    }
+    root.querySelectorAll(".tile").forEach(function (t) {
+      t.addEventListener("click", function () {
+        var ch = t.dataset.ch, k = LS.pick.indexOf(ch);
+        if (k > -1) LS.pick.splice(k, 1); else LS.pick.push(ch);
+        t.setAttribute("aria-pressed", String(k < 0));
+        document.getElementById("lcheck").disabled = LS.pick.length === 0;
+      });
+    });
+    document.getElementById("lcheck").addEventListener("click", function () {
+      var good = LS.pick.length === q.answers.length && q.answers.every(function (a) { return LS.pick.indexOf(a) > -1; });
+      q.ids.forEach(function (id) { gradeLetter(id, good); });
+      if (good) LS.right++;
+      else q.ids.forEach(function (id) { if (LS.missed.indexOf(id) < 0) LS.missed.push(id); });
+      LS.checked = true; renderTest();
+    });
+  }
+  function renderLettersDone() {
+    var missedIds = LS.mode === "study" ? Object.keys(LS.missed) : LS.missed;
+    var head = LS.mode === "study"
+      ? '<div class="score">' + (LS.total - missedIds.length) + '<small>of ' + LS.total + ' known first time</small></div>'
+      : '<div class="score">' + LS.right + '<small>of ' + LS.qs.length + ' makhārij right</small></div>';
+    var missedGlyphs = missedIds.map(function (id) { var c = cardById(id); return c ? c.letter : ""; });
+    var html = head +
+      (missedIds.length ? '<p class="skipnote">Worth another look: <span class="ar">' + esc(missedGlyphs.join(" ، ")) + '</span></p>' : '') +
+      (missedIds.length ? '<button class="cta" id="lmissed">Study those again</button>' : '') +
+      (LS.mode === "study" ? '<a class="ghost" href="#/letters/test/' + LS.region + '">Test yourself on these</a>'
+                           : '<a class="ghost" href="#/letters/study/' + LS.region + '">Study these cards</a>') +
+      '<a class="ghost" href="#/letters">Back to letters</a>';
+    lmount(html, 1, 1);
+    var again = document.getElementById("lmissed");
+    if (again) again.addEventListener("click", function () { startStudy("all", missedIds); });
   }
 
   /* ── glossary page ──────────────────────── */
