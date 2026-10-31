@@ -416,3 +416,6 @@ a.ghost{color:var(--ink)}
 .fc-more summary .ar{font-size:1.15rem;color:var(--ink)}
 .kbd{font-size:.72em;font-weight:600;opacity:.6;margin-left:.35rem}
 @media (hover: none){ .kbd{display:none} }
+.lc-full{display:flex;flex-direction:column;gap:.15rem;margin:.2rem 0 .5rem}
+.lc-full .lc-mar{font-size:1.2rem;line-height:1.8}
+.lc-full .lc-men{font-weight:500;color:var(--ink-soft);margin:.15rem 0 0}

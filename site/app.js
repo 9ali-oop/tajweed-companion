@@ -977,6 +977,12 @@
       '<summary>More about <span class="ar">' + esc(c.letter) + '</span></summary>' +
       '<div class="lc-meta"><span class="lc-reg">' + regionLabel(c.region) + '</span>' +
         '<span class="lc-no">Makhraj ' + c.makhraj_no + ' of 17</span></div>' +
+      (c.makhraj_ar !== c.short[0] || c.makhraj_en !== c.short[1]
+        ? '<div class="lc-full"><span class="lc-jz-label">In detail</span>' +
+            (c.makhraj_ar !== c.short[0] ? '<div class="lc-mar ar">' + esc(c.makhraj_ar) + '</div>' : '') +
+            (c.makhraj_en !== c.short[1] ? '<p class="lc-men">' + esc(c.makhraj_en) + '</p>' : '') +
+          '</div>'
+        : '') +
       '<p class="lc-row">' + arWrap(esc(c.diff)) + '</p>' +
       '<p class="lc-feel"><strong>Feel it:</strong> ' + arWrap(esc(c.feel)) + '</p>' +
       '<div class="lc-jz"><span class="lc-jz-label">Ibn al-Jazarī</span><span class="ar">' + esc(c.jazariyyah) + '</span>' +
@@ -999,8 +1005,8 @@
           '<span class="fc-ex"><span class="ar">' + esc(c.example.text) + '</span> ' + esc(c.example.ref) + '</span></div>' +
         (LS.flipped
           ? '<div class="fc-answer">' +
-              '<div class="fc-mar ar">' + esc(c.makhraj_ar) + '</div>' +
-              '<p class="fc-men">' + esc(c.makhraj_en) + '</p>' +
+              '<div class="fc-mar ar">' + esc(c.short[0]) + '</div>' +
+              '<p class="fc-men">' + esc(c.short[1]) + '</p>' +
               '<p class="fc-same">' + (c.shares.length
                 ? same + ': <span class="ar">' + c.shares.map(esc).join(" ، ") + '</span>'
                 : 'No other letter comes from here.') + '</p>' +
