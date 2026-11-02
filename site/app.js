@@ -965,15 +965,115 @@
     var boxes = loadBoxes();
     var cs = cardsIn(region).filter(function (c) { return !onlyIds || onlyIds.indexOf(c.id) > -1; });
     cs.sort(function (a, b) { return (boxes[a.id] || 0) - (boxes[b.id] || 0) || a.makhraj_no - b.makhraj_no; });
-    LS = { mode: "study", region: region, queue: cs.map(function (c) { return c.id; }),
-           total: cs.length, done: 0, missed: {}, flipped: false };
-    renderStudy();
+    flipStart("study", cs.map(function (c) { return { id: c.id }; }), { region: region });
   }
-  // Flashcard style: one card, tap it or press Space to turn it. The answer
-  // is the essentials only (the makhraj in Arabic and English, and the letters
-  // sharing it); everything else sits under "More", which stays open once
-  // opened. Keys: Space or Enter turns the card, then counts as "Got it";
-  // 1 or ← is "Again", 2 or → is "Got it".
+
+  // Flip decks (letter Study, makhārij Review) work like a Quizlet deck: a
+  // fixed list for the round, ‹ › or ← → to move through it freely, Space or
+  // a tap to turn a card (a tap turns it back too). "Again" (1) and "Got it"
+  // (2, or Space on the back) mark the card and move on. Marking a card again
+  // after going back first undoes the old mark, so its box is as it was. At
+  // the end of a round, the cards not marked "Got it" can go round again; the
+  // first round's marks give the summary.
+  var FLIP = {
+    study: {
+      render: function () { renderStudy(); }, done: function () { renderLettersDone(); },
+      key: function (q) { return q.id; },
+      grade: function (q, ok) { gradeLetter(q.id, ok); },
+      snap: function (q) { return { b: loadBoxes()[q.id], p: loadProgress()["L_" + q.id] }; },
+      restore: function (q, s) {
+        var b = loadBoxes(), p = loadProgress();
+        put(b, q.id, s.b); saveBoxes(b); put(p, "L_" + q.id, s.p); saveProgress(p);
+      }
+    },
+    memo: {
+      render: function () { renderMemo(); }, done: function () { renderMemoDone(); },
+      key: function (q) { return q.no + ":" + q.dir; },
+      grade: function (q, ok) { gradeMemo(q.no, q.dir, ok); },
+      snap: function (q) { return { r: loadMemo()[q.no + ":" + q.dir], p: loadProgress()["M_" + q.no] }; },
+      restore: function (q, s) {
+        var m = loadMemo(), p = loadProgress();
+        put(m, q.no + ":" + q.dir, s.r); saveMemo(m); put(p, "M_" + q.no, s.p); saveProgress(p);
+      }
+    }
+  };
+  function put(o, k, v) { if (v === undefined) delete o[k]; else o[k] = v; }
+  function flipOn() { return !!(LS && FLIP[LS.mode]); }
+  function flipStart(mode, list, extra) {
+    LS = { mode: mode, list: list, i: 0, marks: [], round: 1, flipped: false, total: list.length, missed: {} };
+    for (var k in extra || {}) LS[k] = extra[k];
+    FLIP[mode].render();
+  }
+  function flipMarked() { return LS.marks.filter(Boolean).length; }
+  function flipTurn() {
+    if (!flipOn() || LS.i >= LS.list.length) return;
+    LS.flipped = !LS.flipped; FLIP[LS.mode].render();
+  }
+  function flipGo(d) {
+    if (!flipOn()) return;
+    var j = LS.i + d;
+    if (j < 0 || j > LS.list.length) return;
+    LS.i = j; LS.flipped = false;
+    if (j === LS.list.length) flipRoundEnd(); else FLIP[LS.mode].render();
+  }
+  function flipMark(ok) {
+    if (!flipOn() || !LS.flipped || LS.i >= LS.list.length) return;
+    var F = FLIP[LS.mode], q = LS.list[LS.i], old = LS.marks[LS.i];
+    if (old) F.restore(q, old.snap);
+    var snap = old ? old.snap : F.snap(q);
+    F.grade(q, ok);
+    q.isNew = false;
+    LS.marks[LS.i] = { ok: ok, snap: snap };
+    flipGo(1);
+  }
+  function flipNav() {
+    var m = LS.marks[LS.i];
+    return '<div class="fnav">' +
+      '<button class="fnav-btn" id="fprev" aria-label="Previous card"' + (LS.i ? "" : " disabled") + '>‹</button>' +
+      '<span class="fnav-count">' + (LS.round > 1 ? "Round " + LS.round + " · " : "") + (LS.i + 1) + ' / ' + LS.list.length +
+        (m ? '<span class="fnav-mark ' + (m.ok ? "ok" : "again") + '">' + (m.ok ? "Got it" : "Again") + '</span>' : '') + '</span>' +
+      '<button class="fnav-btn" id="fnext" aria-label="Next card">›</button></div>';
+  }
+  function flipGrades() {
+    var m = LS.marks[LS.i];
+    return '<div class="qnav"><button class="nav-btn' + (m && !m.ok ? " marked" : "") + '" id="lagain">Again<span class="kbd"> 1</span></button>' +
+      '<button class="nav-btn primary' + (m && m.ok ? " marked" : "") + '" id="lgot">Got it<span class="kbd"> Space</span></button></div>';
+  }
+  function flipBind() {
+    document.getElementById("fc").addEventListener("click", flipTurn);
+    document.getElementById("fprev").addEventListener("click", function () { flipGo(-1); });
+    document.getElementById("fnext").addEventListener("click", function () { flipGo(1); });
+    var a = document.getElementById("lagain"), g = document.getElementById("lgot");
+    if (a) a.addEventListener("click", function () { flipMark(false); });
+    if (g) g.addEventListener("click", function () { flipMark(true); });
+  }
+  function flipRoundEnd() {
+    var F = FLIP[LS.mode], n = LS.list.length, ok = 0, again = 0;
+    LS.marks.forEach(function (m) { if (m && m.ok) ok++; else if (m) again++; });
+    var rest = LS.list.filter(function (q, k) { return !(LS.marks[k] && LS.marks[k].ok); });
+    if (LS.round === 1) {
+      LS.missed = {};
+      rest.forEach(function (q) { LS.missed[F.key(q)] = true; });
+    }
+    if (!rest.length) return F.done();
+    var skipped = n - ok - again, parts = [];
+    if (again) parts.push(again + " marked Again");
+    if (skipped) parts.push(skipped + " not marked");
+    lmount('<div class="score">' + ok + '<small>of ' + n + ' marked Got it</small></div>' +
+      '<p class="skipnote">' + parts.join(", ") + '.</p>' +
+      '<button class="cta" id="fround">Go over ' + (rest.length === 1 ? "that card" : "those " + rest.length + " cards") + ' again</button>' +
+      '<button class="ghost" id="flast">‹ Back to the last card</button>' +
+      '<button class="ghost" id="fdone">Finish</button>', ok, n);
+    document.getElementById("fround").addEventListener("click", function () {
+      LS.list = rest; LS.i = 0; LS.marks = []; LS.round++; LS.flipped = false; F.render();
+    });
+    document.getElementById("flast").addEventListener("click", function () { flipGo(-1); });
+    document.getElementById("fdone").addEventListener("click", function () { F.done(); });
+  }
+
+  // The letter card: tap it or press Space to turn it. The answer is the
+  // essentials only (the makhraj's short name and the letters sharing it);
+  // everything else sits under "More", which stays open once opened.
   var MORE = "tajweed-letters-more";
   function moreOpen() { try { return localStorage.getItem(MORE) === "1"; } catch (e) { return false; } }
   function letterMore(c) {
@@ -997,13 +1097,13 @@
   }
   function renderStudy() {
     VIEW = "lsession";
-    if (!LS.queue.length) return renderLettersDone();
-    var c = cardById(LS.queue[0]);
+    if (!LS.list.length) return renderLettersDone();
+    var c = cardById(LS.list[LS.i].id);
     document.title = "Letters · " + c.letter + " · Tajweed Companion";
     var same = c.id === "ghunna" ? "Carried by" : "Same point";
     var html =
-      '<div class="fc' + (LS.flipped ? " fc-flipped" : "") + '" id="fc"' +
-        (LS.flipped ? "" : ' role="button" tabindex="0" aria-label="Show the makhraj"') + '>' +
+      '<div class="fc' + (LS.flipped ? " fc-flipped" : "") + '" id="fc" role="button" tabindex="0" aria-label="' +
+        (LS.flipped ? "Turn the card back" : "Show the makhraj") + '">' +
         '<div class="fc-letter ar">' + esc(c.letter) + '</div>' +
         '<div class="fc-say">Say <span class="ar">' + esc(c.say) + '</span>' +
           '<span class="fc-ex"><span class="ar">' + esc(c.example.text) + '</span> ' + esc(c.example.ref) + '</span></div>' +
@@ -1015,48 +1115,33 @@
                 ? same + ': <span class="ar">' + c.shares.map(esc).join(" ، ") + '</span>'
                 : 'No other letter comes from here.') + '</p>' +
             '</div>'
-          : '<div class="fc-hint">Tap to turn<span class="kbd"> or press Space</span></div>') +
+          : '<div class="fc-hint">Tap to turn<span class="kbd"> or press Space · ← → to move</span></div>') +
       '</div>' +
-      (LS.flipped
-        ? letterMore(c) +
-          '<div class="qnav"><button class="nav-btn" id="lagain">Again<span class="kbd"> 1</span></button>' +
-            '<button class="nav-btn primary" id="lgot">Got it<span class="kbd"> Space</span></button></div>'
-        : '');
-    lmount(html, LS.done, LS.total);
-    if (!LS.flipped) {
-      var fc = document.getElementById("fc");
-      fc.addEventListener("click", flipCard);
-      return;
-    }
-    document.getElementById("fcmore").addEventListener("toggle", function (e) {
+      flipNav() +
+      (LS.flipped ? flipGrades() + letterMore(c) : '');
+    lmount(html, flipMarked(), LS.list.length);
+    flipBind();
+    if (LS.flipped) document.getElementById("fcmore").addEventListener("toggle", function (e) {
       try { localStorage.setItem(MORE, e.target.open ? "1" : "0"); } catch (err) { /* storage blocked */ }
     });
-    document.getElementById("lgot").addEventListener("click", function () { gradeCard(true); });
-    document.getElementById("lagain").addEventListener("click", function () { gradeCard(false); });
-  }
-  function flipCard() {
-    if (!LS || LS.mode !== "study" || LS.flipped) return;
-    LS.flipped = true; renderStudy();
-  }
-  function gradeCard(ok) {
-    if (!LS || LS.mode !== "study" || !LS.flipped) return;
-    var id = LS.queue[0];
-    gradeLetter(id, ok);
-    LS.queue.shift();
-    if (ok) LS.done++;
-    else { LS.missed[id] = true; LS.queue.splice(Math.min(3, LS.queue.length), 0, id); }
-    LS.flipped = false; renderStudy();
   }
   document.addEventListener("keydown", function (e) {
     if (VIEW !== "lsession" || !LS || e.altKey || e.ctrlKey || e.metaKey) return;
     var t = e.target && e.target.tagName;
     if (t === "INPUT" || t === "TEXTAREA" || t === "SUMMARY" || (t === "A" && e.key === "Enter")) return;
     var k = e.key;
-    if (LS.mode === "study" || LS.mode === "memo") {
-      var flip = LS.mode === "study" ? flipCard : flipMemo, grade = LS.mode === "study" ? gradeCard : gradeMemoCard;
-      if (k === " " || k === "Enter") { e.preventDefault(); if (LS.flipped) grade(true); else flip(); }
-      else if (LS.flipped && (k === "1" || k === "ArrowLeft")) { e.preventDefault(); grade(false); }
-      else if (LS.flipped && (k === "2" || k === "ArrowRight")) { e.preventDefault(); grade(true); }
+    if (flipOn()) {
+      // A focused button keeps its own Enter and Space.
+      if ((k === " " || k === "Enter") && t === "BUTTON") return;
+      if (k === "ArrowLeft") { e.preventDefault(); flipGo(-1); }
+      else if (LS.i >= LS.list.length) {
+        var cta = root.querySelector(".cta");
+        if (cta && (k === " " || k === "Enter")) { e.preventDefault(); cta.click(); }
+      }
+      else if (k === "ArrowRight") { e.preventDefault(); flipGo(1); }
+      else if (k === " " || k === "Enter") { e.preventDefault(); if (LS.flipped) flipMark(true); else flipTurn(); }
+      else if (LS.flipped && k === "1") { e.preventDefault(); flipMark(false); }
+      else if (LS.flipped && k === "2") { e.preventDefault(); flipMark(true); }
     } else if (LS.mode === "build") {
       // Enter checks, then moves on; Space also moves on; Backspace takes back the last word.
       if (k === "Backspace") { e.preventDefault(); unplace(LS.placed.length - 1); }
@@ -1259,19 +1344,17 @@
     var intro = fresh.filter(function (q) { return nos.indexOf(q.no) > -1; }).sort(function (a, b) {
       return (a.dir === "ae" ? 0 : 1) - (b.dir === "ae" ? 0 : 1) || a.no - b.no;
     });
-    var queue = due.concat(intro);
-    LS = { mode: "memo", queue: queue, total: queue.length, done: 0, missed: {}, flipped: false };
-    renderMemo();
+    flipStart("memo", due.concat(intro));
   }
   function renderMemo() {
     VIEW = "lsession";
-    if (!LS.queue.length) return renderMemoDone();
-    var q = LS.queue[0], x = memoByNo(q.no), ea = q.dir === "ea";
+    if (!LS.list.length) return renderMemoDone();
+    var q = LS.list[LS.i], x = memoByNo(q.no), ea = q.dir === "ea";
     var ar = '<div class="mc-ar ar">' + esc(x.ar) + '</div>', en = '<p class="mc-en">' + esc(x.en) + '</p>';
     document.title = "Makhārij by heart · Tajweed Companion";
     var html =
-      '<div class="fc mc' + (LS.flipped ? " fc-flipped" : "") + '" id="fc"' +
-        (LS.flipped ? "" : ' role="button" tabindex="0" aria-label="Show the answer"') + '>' +
+      '<div class="fc mc' + (LS.flipped ? " fc-flipped" : "") + '" id="fc" role="button" tabindex="0" aria-label="' +
+        (LS.flipped ? "Turn the card back" : "Show the answer") + '">' +
         '<div class="mc-dir">' + (ea ? "English → Arabic" : "Arabic → English") +
           (q.isNew ? '<span class="mc-new">New</span>' : '') + '</div>' +
         (ea ? en : ar) +
@@ -1280,29 +1363,12 @@
               '<p class="mc-meta">Makhraj ' + x.no + ' of 17 · ' + (x.no === 17 ? "carried by" : "letters") +
                 ' <span class="ar">' + x.letters.map(esc).join(" ، ") + '</span></p></div>'
           : '<div class="fc-hint">' + (ea ? "Say the Shaykh’s wording" : "Say what it means") +
-              ', then tap to turn<span class="kbd"> or press Space</span></div>') +
+              ', then tap to turn<span class="kbd"> or press Space · ← → to move</span></div>') +
       '</div>' +
-      (LS.flipped
-        ? '<div class="qnav"><button class="nav-btn" id="lagain">Again<span class="kbd"> 1</span></button>' +
-            '<button class="nav-btn primary" id="lgot">Got it<span class="kbd"> Space</span></button></div>'
-        : '');
-    lmount(html, LS.done, LS.total);
-    if (!LS.flipped) { document.getElementById("fc").addEventListener("click", flipMemo); return; }
-    document.getElementById("lgot").addEventListener("click", function () { gradeMemoCard(true); });
-    document.getElementById("lagain").addEventListener("click", function () { gradeMemoCard(false); });
-  }
-  function flipMemo() {
-    if (!LS || LS.mode !== "memo" || LS.flipped) return;
-    LS.flipped = true; renderMemo();
-  }
-  function gradeMemoCard(ok) {
-    if (!LS || LS.mode !== "memo" || !LS.flipped) return;
-    var q = LS.queue.shift();
-    gradeMemo(q.no, q.dir, ok);
-    q.isNew = false;
-    if (ok) LS.done++;
-    else { LS.missed[q.no + ":" + q.dir] = true; LS.queue.splice(Math.min(3, LS.queue.length), 0, q); }
-    LS.flipped = false; renderMemo();
+      flipNav() +
+      (LS.flipped ? flipGrades() : '');
+    lmount(html, flipMarked(), LS.list.length);
+    flipBind();
   }
 
   // Exact wording: build the Arabic from its words, shuffled with two or three

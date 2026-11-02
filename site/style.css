@@ -446,3 +446,15 @@ a.ghost{color:var(--ink)}
 .wchip.wrong{background:var(--bad-bg);border-color:var(--bad);color:var(--bad);opacity:1}
 .memo .lreg-actions .nav-btn{white-space:nowrap;padding-left:.35rem;padding-right:.35rem;background:var(--card)}
 .memo .lreg-actions .nav-btn.primary{background:var(--brand)}
+/* flip decks: move between cards */
+.fnav{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:0 0 .9rem}
+.fnav-btn{width:3.2rem;height:2.6rem;border-radius:12px;background:var(--sunk);color:var(--ink);font-size:1.6rem;line-height:1;font-weight:600;padding:0 0 .2rem}
+.fnav-btn:hover:not(:disabled){background:var(--brand-soft)}
+.fnav-btn:disabled{opacity:.3;cursor:default}
+.fnav-count{font-weight:600;color:var(--ink-soft);font-size:.92rem;display:flex;align-items:center;gap:.45rem;font-variant-numeric:tabular-nums}
+.fnav-mark{font-size:.7rem;font-weight:700;border-radius:999px;padding:.12rem .5rem}
+.fnav-mark.ok{background:var(--good-bg);color:var(--good)}
+.fnav-mark.again{background:var(--bad-bg);color:var(--bad)}
+.nav-btn.marked{outline:2px solid var(--brand);outline-offset:2px}
+.fc-flipped{cursor:pointer}
+.qnav + .fc-more{margin-top:.9rem}
