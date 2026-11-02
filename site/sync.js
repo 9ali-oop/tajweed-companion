@@ -211,6 +211,8 @@ async function deleteEverything() {
   try {
     localStorage.removeItem(KEY);
     localStorage.removeItem("tajweed-companion-attempts-v1");
+    localStorage.removeItem("tajweed-companion-letters-v1");
+    localStorage.removeItem("tajweed-companion-makharij-v1");
   } catch (e) { /* storage blocked */ }
   state.justDeleted = true;
   document.dispatchEvent(new CustomEvent("tj:progress-updated"));

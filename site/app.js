@@ -187,7 +187,7 @@
             '<small>' + (window.GLOSSARY || []).length + ' terms explained</small></a>' +
           (LT.cards.length ? '<a class="qtile qtile-wide" href="#/letters">' +
             '<span class="qi qi-lt ar" aria-hidden="true">ض</span><span class="qt-text"><strong>Letters</strong>' +
-            '<small>Learn where each letter comes from: ' + LT.cards.length + ' flashcards</small></span></a>' : '') +
+            '<small>The 17 makhārij by heart, and ' + LT.cards.length + ' letter flashcards</small></span></a>' : '') +
         '</div>' +
         continueCard(p) +
         '<div class="overall">' +
@@ -847,6 +847,8 @@
     else if (h === "#/privacy") { S = null; renderPrivacy(); }
     else if (h === "#/glossary") { S = null; renderGlossary(); }
     else if (h === "#/letters") renderLetters();
+    else if (h === "#/letters/memo" && MEMO.length) { S = null; startMemo(false); }
+    else if (h === "#/letters/build" && MEMO.length) { S = null; startBuild(); }
     else if (/^#\/letters\/(study|test)\/(\w+)$/.test(h)) {
       var lm = /^#\/letters\/(study|test)\/(\w+)$/.exec(h);
       S = null;
@@ -942,9 +944,11 @@
       '<div class="bar"><button class="back" id="btnBack">‹ All units</button></div>' +
       '<div class="card prose">' +
         '<h1>Letters and their makhārij</h1>' +
-        '<p class="lead">Where each letter comes from, in the Shaykh’s own words. Go region by region, ' +
-          'in the order of episodes 3 to 6, and say each practice syllable aloud: with a sukūn, the sound ' +
-          'stops exactly at the letter’s makhraj.</p>' +
+        '<p class="lead">Where each letter comes from, in the Shaykh’s own words.</p>' +
+        memoBlock() +
+        '<h2 class="lt-h2">Letter by letter</h2>' +
+        '<p>Go region by region, in the order of episodes 3 to 6, and say each practice syllable aloud: ' +
+          'with a sukūn, the sound stops exactly at the letter’s makhraj.</p>' +
         '<div class="overall lt-overall"><div class="row"><span class="big">' + known + ' / ' + LT.cards.length + '</span>' +
           '<span class="cap">cards known</span></div>' +
           '<div class="track"><div class="fill" style="width:' + (known / Math.max(1, LT.cards.length) * 100) + '%"></div></div></div>' +
@@ -1048,10 +1052,18 @@
     var t = e.target && e.target.tagName;
     if (t === "INPUT" || t === "TEXTAREA" || t === "SUMMARY" || (t === "A" && e.key === "Enter")) return;
     var k = e.key;
-    if (LS.mode === "study") {
-      if (k === " " || k === "Enter") { e.preventDefault(); if (LS.flipped) gradeCard(true); else flipCard(); }
-      else if (LS.flipped && (k === "1" || k === "ArrowLeft")) { e.preventDefault(); gradeCard(false); }
-      else if (LS.flipped && (k === "2" || k === "ArrowRight")) { e.preventDefault(); gradeCard(true); }
+    if (LS.mode === "study" || LS.mode === "memo") {
+      var flip = LS.mode === "study" ? flipCard : flipMemo, grade = LS.mode === "study" ? gradeCard : gradeMemoCard;
+      if (k === " " || k === "Enter") { e.preventDefault(); if (LS.flipped) grade(true); else flip(); }
+      else if (LS.flipped && (k === "1" || k === "ArrowLeft")) { e.preventDefault(); grade(false); }
+      else if (LS.flipped && (k === "2" || k === "ArrowRight")) { e.preventDefault(); grade(true); }
+    } else if (LS.mode === "build") {
+      // Enter checks, then moves on; Space also moves on; Backspace takes back the last word.
+      if (k === "Backspace") { e.preventDefault(); unplace(LS.placed.length - 1); }
+      else if (k === "Enter" || (k === " " && LS.checked)) {
+        var nb = document.getElementById("bcheck") || document.getElementById("bnext");
+        if (nb && !nb.disabled && !(t === "BUTTON" && e.target.classList.contains("wchip"))) { e.preventDefault(); nb.click(); }
+      }
     } else if (LS.mode === "test" && (k === "Enter" || k === " ")) {
       var b = document.getElementById("lcheck") || document.getElementById("lnext");
       if (b && !b.disabled && !(t === "BUTTON" && e.target.classList.contains("tile"))) { e.preventDefault(); b.click(); }
@@ -1142,6 +1154,277 @@
     lmount(html, 1, 1);
     var again = document.getElementById("lmissed");
     if (again) again.addEventListener("click", function () { startStudy("all", missedIds); });
+  }
+
+  /* ── the 17 makhārij by heart ───────────── */
+  // One card per makhraj, its short name both ways round: English → Arabic
+  // ("ea") and Arabic → English ("ae"). Each direction has its own box and due
+  // day on this device. "Got it" on a due card moves it up a box and away for
+  // 1, 3, 7, 16 or 35 days; early practice moves nothing. "Again" drops it to
+  // box 0 and back into the session a few cards later. A makhraj is known both
+  // ways once both directions reach box 2, which takes two different days.
+  // The lower box of the two is saved with the scores under "M_<no>", so a
+  // second device starts from there.
+  var MEMO = LT.memo || [];
+  var MBOX = "tajweed-companion-makharij-v1";
+  var MDAYS = [0, 1, 3, 7, 16, 35];
+  var MNEW = 5;       // new makhārij brought in per session
+  var MCAP = 20;      // cards per review session
+  var BUILD_CAP = 8;  // makhārij per exact-wording round
+
+  function today() {
+    var d = new Date();
+    return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
+  }
+  function loadMemo() {
+    try { return JSON.parse(localStorage.getItem(MBOX) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveMemo(m) {
+    try { localStorage.setItem(MBOX, JSON.stringify(m)); } catch (e) { /* storage blocked */ }
+  }
+  function memoByNo(no) {
+    for (var i = 0; i < MEMO.length; i++) if (MEMO[i].no === no) return MEMO[i];
+    return null;
+  }
+  function memoRec(m, p, no, dir) {
+    var r = m[no + ":" + dir];
+    if (r) return r;
+    var s = p["M_" + no];
+    return s && s.best > 0 ? { b: s.best, d: today() } : null;
+  }
+  function memoKnown(no, m, p) {
+    var a = memoRec(m, p, no, "ea"), b = memoRec(m, p, no, "ae");
+    return !!(a && b && a.b >= 2 && b.b >= 2);
+  }
+  function memoDue(m, p) {
+    var t = today(), n = 0;
+    MEMO.forEach(function (x) {
+      ["ea", "ae"].forEach(function (dir) { var r = memoRec(m, p, x.no, dir); if (r && r.d <= t) n++; });
+    });
+    return n;
+  }
+  function memoFresh(m, p) {
+    return MEMO.filter(function (x) { return !memoRec(m, p, x.no, "ea") || !memoRec(m, p, x.no, "ae"); }).length;
+  }
+  function gradeMemo(no, dir, ok) {
+    var m = loadMemo(), p = loadProgress(), t = today();
+    var r = memoRec(m, p, no, dir) || { b: 0, d: t }, early = r.d > t;
+    var b = !ok ? 0 : early ? r.b : Math.min(r.b + 1, MDAYS.length - 1);
+    m[no + ":" + dir] = { b: b, d: !ok ? t : early ? r.d : t + MDAYS[b] };
+    saveMemo(m);
+    var other = memoRec(m, p, no, dir === "ea" ? "ae" : "ea");
+    var low = Math.min(b, other ? other.b : 0), prev = p["M_" + no] || { best: 0, total: 5, runs: 0 };
+    p["M_" + no] = { best: Math.max(prev.best || 0, low), total: 5, runs: (prev.runs || 0) + 1 };
+    saveProgress(p);
+    document.dispatchEvent(new CustomEvent("tj:progress-saved"));
+  }
+
+  // The block at the top of the letters page.
+  function memoBlock() {
+    if (!MEMO.length) return "";
+    var m = loadMemo(), p = loadProgress();
+    var known = MEMO.filter(function (x) { return memoKnown(x.no, m, p); }).length;
+    var due = memoDue(m, p), fresh = memoFresh(m, p);
+    var dueTxt = due + (due === 1 ? " card" : " cards") + " due today";
+    var freshTxt = fresh + (fresh === 1 ? " makhraj" : " makhārij") + " still new";
+    var status = due && fresh ? dueTxt + ", " + freshTxt : due ? dueTxt : fresh ? freshTxt : "Nothing due today";
+    return '<div class="memo">' +
+      '<div class="lreg-head"><span class="lreg-name">The 17 makhārij by heart</span>' +
+        '<span class="lreg-count">' + known + ' / ' + MEMO.length + ' known both ways</span></div>' +
+      '<p class="memo-sub">Each makhraj in the Shaykh’s words and in English, both ways round. Missed cards ' +
+        'come back sooner, known ones later. A makhraj counts as known when you have it both ways on two different days.</p>' +
+      '<div class="track"><div class="fill" style="width:' + (known / MEMO.length * 100) + '%"></div></div>' +
+      '<p class="memo-due">' + status + '</p>' +
+      '<div class="lreg-actions"><a class="nav-btn primary" href="#/letters/memo">Review</a>' +
+        '<a class="nav-btn" href="#/letters/build">Exact wording</a></div>' +
+    '</div>';
+  }
+
+  // Review: due cards first, weakest first, then a few new makhārij in the
+  // course's order. All their Arabic → English cards come before their
+  // English → Arabic ones, so the two sides of one makhraj never sit together.
+  function startMemo(practise) {
+    var m = loadMemo(), p = loadProgress(), t = today(), due = [], fresh = [];
+    MEMO.forEach(function (x) {
+      ["ea", "ae"].forEach(function (dir) {
+        var r = memoRec(m, p, x.no, dir);
+        if (!r) fresh.push({ no: x.no, dir: dir, isNew: true });
+        else if (practise || r.d <= t) due.push({ no: x.no, dir: dir, b: r.b });
+      });
+    });
+    due = shuffled(due).sort(function (a, b) { return a.b - b.b; }).slice(0, MCAP);
+    var room = Math.min(MNEW, Math.floor((MCAP - due.length) / 2));
+    var nos = fresh.map(function (q) { return q.no; })
+      .filter(function (x, i, a) { return a.indexOf(x) === i; }).slice(0, Math.max(0, room));
+    var intro = fresh.filter(function (q) { return nos.indexOf(q.no) > -1; }).sort(function (a, b) {
+      return (a.dir === "ae" ? 0 : 1) - (b.dir === "ae" ? 0 : 1) || a.no - b.no;
+    });
+    var queue = due.concat(intro);
+    LS = { mode: "memo", queue: queue, total: queue.length, done: 0, missed: {}, flipped: false };
+    renderMemo();
+  }
+  function renderMemo() {
+    VIEW = "lsession";
+    if (!LS.queue.length) return renderMemoDone();
+    var q = LS.queue[0], x = memoByNo(q.no), ea = q.dir === "ea";
+    var ar = '<div class="mc-ar ar">' + esc(x.ar) + '</div>', en = '<p class="mc-en">' + esc(x.en) + '</p>';
+    document.title = "Makhārij by heart · Tajweed Companion";
+    var html =
+      '<div class="fc mc' + (LS.flipped ? " fc-flipped" : "") + '" id="fc"' +
+        (LS.flipped ? "" : ' role="button" tabindex="0" aria-label="Show the answer"') + '>' +
+        '<div class="mc-dir">' + (ea ? "English → Arabic" : "Arabic → English") +
+          (q.isNew ? '<span class="mc-new">New</span>' : '') + '</div>' +
+        (ea ? en : ar) +
+        (LS.flipped
+          ? '<div class="fc-answer">' + (ea ? ar : en) +
+              '<p class="mc-meta">Makhraj ' + x.no + ' of 17 · ' + (x.no === 17 ? "carried by" : "letters") +
+                ' <span class="ar">' + x.letters.map(esc).join(" ، ") + '</span></p></div>'
+          : '<div class="fc-hint">' + (ea ? "Say the Shaykh’s wording" : "Say what it means") +
+              ', then tap to turn<span class="kbd"> or press Space</span></div>') +
+      '</div>' +
+      (LS.flipped
+        ? '<div class="qnav"><button class="nav-btn" id="lagain">Again<span class="kbd"> 1</span></button>' +
+            '<button class="nav-btn primary" id="lgot">Got it<span class="kbd"> Space</span></button></div>'
+        : '');
+    lmount(html, LS.done, LS.total);
+    if (!LS.flipped) { document.getElementById("fc").addEventListener("click", flipMemo); return; }
+    document.getElementById("lgot").addEventListener("click", function () { gradeMemoCard(true); });
+    document.getElementById("lagain").addEventListener("click", function () { gradeMemoCard(false); });
+  }
+  function flipMemo() {
+    if (!LS || LS.mode !== "memo" || LS.flipped) return;
+    LS.flipped = true; renderMemo();
+  }
+  function gradeMemoCard(ok) {
+    if (!LS || LS.mode !== "memo" || !LS.flipped) return;
+    var q = LS.queue.shift();
+    gradeMemo(q.no, q.dir, ok);
+    q.isNew = false;
+    if (ok) LS.done++;
+    else { LS.missed[q.no + ":" + q.dir] = true; LS.queue.splice(Math.min(3, LS.queue.length), 0, q); }
+    LS.flipped = false; renderMemo();
+  }
+
+  // Exact wording: build the Arabic from its words, shuffled with two or three
+  // look-alikes (أقصى for أدنى, العليا for السفلى…). Checked word for word; a
+  // result counts for the English → Arabic card.
+  var LOOKALIKE = [["أقصى", "وسط", "أدنى"], ["العليا", "السفلى"], ["أصول", "أطراف"], ["اللحمي", "والعظمي"],
+                   ["طرف", "منتهى", "حافة"], ["للثنايا", "للأضراس"], ["الحلق", "اللسان"], ["اللثة", "الحنك"]];
+  function arWords(s) { return s.replace(/[،:]/g, " ").split(/\s+/).filter(Boolean); }
+  function decoysFor(x) {
+    var have = arWords(x.ar), pick = [];
+    var add = function (w) { if (have.indexOf(w) < 0 && pick.indexOf(w) < 0) pick.push(w); };
+    LOOKALIKE.forEach(function (set) {
+      if (set.some(function (w) { return have.indexOf(w) > -1; })) set.forEach(add);
+    });
+    pick = shuffled(pick);
+    // Too few look-alikes: borrow words from neighbouring makhārij.
+    if (pick.length < 2) [true, false].forEach(function (near) {
+      shuffled(MEMO).forEach(function (y) {
+        if (y.no !== x.no && (y.region === x.region) === near) shuffled(arWords(y.ar)).forEach(add);
+      });
+    });
+    return pick.slice(0, 3);
+  }
+  function startBuild() {
+    var m = loadMemo(), p = loadProgress();
+    var order = MEMO.map(function (x) { var r = memoRec(m, p, x.no, "ea"); return { no: x.no, b: r ? r.b : -1 }; })
+      .sort(function (a, b) { return a.b - b.b || a.no - b.no; }).slice(0, BUILD_CAP)
+      .map(function (o) { return o.no; });
+    LS = { mode: "build", queue: order, total: order.length, done: 0, missed: {} };
+    setupBuild(); renderBuild();
+  }
+  function setupBuild() {
+    var x = memoByNo(LS.queue[0]);
+    LS.answer = arWords(x.ar);
+    LS.pool = shuffled(LS.answer.concat(decoysFor(x))).map(function (w) { return { w: w, used: false }; });
+    LS.placed = []; LS.checked = false; LS.ok = false;
+  }
+  function renderBuild(keepScroll) {
+    VIEW = "lsession";
+    if (!LS.queue.length) return renderMemoDone();
+    var x = memoByNo(LS.queue[0]), y = window.scrollY;
+    document.title = "Exact wording · Tajweed Companion";
+    var line = LS.placed.map(function (i, k) {
+      var cls = LS.checked ? (LS.pool[i].w === LS.answer[k] ? " right" : " wrong") : "";
+      return '<button class="wchip' + cls + '" data-k="' + k + '"' + (LS.checked ? " disabled" : "") + '>' + esc(LS.pool[i].w) + '</button>';
+    }).join("");
+    var html =
+      '<div class="qnum">Exact wording</div>' +
+      '<p class="q">Build the Shaykh’s wording for:</p>' +
+      '<p class="mc-en bq">' + esc(x.en) + '</p>' +
+      '<div class="bline" dir="rtl">' + (line || '<span class="bline-ph">Tap the words in order</span>') + '</div>' +
+      (LS.checked
+        ? '<div class="fb ' + (LS.ok ? "good" : "bad") + '"><div class="verdict">' +
+            (LS.ok ? "Word for word" : "Not quite. The Shaykh’s wording is:") + '</div>' +
+            '<div class="mc-ar ar">' + esc(x.ar) + '</div>' +
+            '<p class="mc-meta">Makhraj ' + x.no + ' of 17 · ' + (x.no === 17 ? "carried by" : "letters") +
+              ' <span class="ar">' + x.letters.map(esc).join(" ، ") + '</span></p></div>' +
+          '<button class="cta" id="bnext">' + (LS.ok && LS.queue.length === 1 ? "See results" : "Next") + '</button>'
+        : '<div class="bpool" dir="rtl">' + LS.pool.map(function (t, i) {
+            return '<button class="wchip' + (t.used ? " used" : "") + '" data-i="' + i + '"' + (t.used ? " disabled" : "") + '>' + esc(t.w) + '</button>';
+          }).join("") + '</div>' +
+          '<button class="cta" id="bcheck"' + (LS.placed.length ? "" : " disabled") + '>Check</button>');
+    lmount(html, LS.done, LS.total);
+    if (keepScroll) window.scrollTo(0, y);
+    if (LS.checked) {
+      document.getElementById("bnext").addEventListener("click", nextBuild);
+      return;
+    }
+    root.querySelectorAll(".bpool .wchip").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var i = +b.dataset.i;
+        if (LS.pool[i].used) return;
+        LS.pool[i].used = true; LS.placed.push(i); renderBuild(true);
+      });
+    });
+    root.querySelectorAll(".bline .wchip").forEach(function (b) {
+      b.addEventListener("click", function () { unplace(+b.dataset.k); });
+    });
+    document.getElementById("bcheck").addEventListener("click", checkBuild);
+  }
+  function unplace(k) {
+    if (!LS || LS.mode !== "build" || LS.checked || k < 0 || k >= LS.placed.length) return;
+    LS.pool[LS.placed[k]].used = false; LS.placed.splice(k, 1); renderBuild(true);
+  }
+  function checkBuild() {
+    if (!LS || LS.mode !== "build" || LS.checked || !LS.placed.length) return;
+    var got = LS.placed.map(function (i) { return LS.pool[i].w; });
+    LS.ok = got.length === LS.answer.length && got.every(function (w, k) { return w === LS.answer[k]; });
+    gradeMemo(LS.queue[0], "ea", LS.ok);
+    if (LS.ok) LS.done++; else LS.missed[LS.queue[0]] = true;
+    LS.checked = true; renderBuild(true);
+  }
+  function nextBuild() {
+    var no = LS.queue.shift();
+    if (!LS.ok) LS.queue.splice(Math.min(3, LS.queue.length), 0, no);
+    if (LS.queue.length) setupBuild();
+    renderBuild();
+  }
+
+  function renderMemoDone() {
+    var m = loadMemo(), p = loadProgress(), t = today(), next = Infinity;
+    var known = MEMO.filter(function (x) { return memoKnown(x.no, m, p); }).length;
+    Object.keys(m).forEach(function (k) { if (m[k].d > t && m[k].d < next) next = m[k].d; });
+    var dueLeft = memoDue(m, p), fresh = memoFresh(m, p), missed = Object.keys(LS.missed).length;
+    var when = next === Infinity ? "" : next - t === 1 ? "tomorrow" : "in " + (next - t) + " days";
+    var build = LS.mode === "build";
+    var head = !LS.total ? '<h2 class="lt-h2">Nothing due today</h2>'
+      : '<div class="score">' + (LS.total - missed) + '<small>of ' + LS.total +
+          (build ? ' built word for word first time' : ' right first time') + '</small></div>';
+    var html = head +
+      '<p class="skipnote">' + known + ' of ' + MEMO.length + ' known both ways.' +
+        (dueLeft ? ' ' + dueLeft + (dueLeft === 1 ? ' card is' : ' cards are') + ' still due today.'
+          : when ? ' The next cards are due ' + when + '.' : '') + '</p>' +
+      (build
+        ? '<button class="cta" id="mgo">Another round</button><a class="ghost" href="#/letters/memo">Review</a>'
+        : '<button class="cta" id="mgo">' + (dueLeft ? "Keep going" : fresh ? "Learn " + Math.min(MNEW, fresh) + " more" : "Practise anyway") +
+            '</button><a class="ghost" href="#/letters/build">Exact wording</a>') +
+      '<a class="ghost" href="#/letters">Back to letters</a>';
+    lmount(html, 1, 1);
+    document.getElementById("mgo").addEventListener("click", function () {
+      if (build) startBuild(); else startMemo(!dueLeft && !fresh);
+    });
   }
 
   /* ── glossary page ──────────────────────── */
@@ -1281,7 +1564,7 @@
         box.classList.add("hide"); reset.classList.remove("hide");
       });
       document.getElementById("resetYes").addEventListener("click", function () {
-        try { localStorage.removeItem(KEY); localStorage.removeItem(ATTEMPTS); } catch (e) {}
+        try { [KEY, ATTEMPTS, LBOX, MBOX].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
         document.getElementById("data-controls").innerHTML =
           '<p class="done-msg">Progress on this device has been reset.</p>';
       });
